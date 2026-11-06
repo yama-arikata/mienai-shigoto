@@ -22,8 +22,8 @@ kabi_correct/snapshots/
 !studio/kit/API.md
 !*/SOURCES.md
 _実験_自動生成/
-index.html
-all.html
+/index.html
+/all.html
 
 # 環境
 .claude/

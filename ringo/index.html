@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>りんごの見えない5年｜見えない仕事サンプル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#f6f4ee;--mute:#cdd2cf;--apple:#ff6a52;--night:#10151a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Noto Sans JP",system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#scroll{height:1200vh}
+#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(10,15,19,.93) 0,rgba(10,15,19,.76) 34%,rgba(10,15,19,0) 60%)}
+.cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none}
+.cap h2{margin:0 0 .55em;font-weight:900;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
+.cap p{margin:0 0 .9em;font-size:clamp(15px,1.25vw,18px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
+.cap em{font-style:normal;color:var(--apple)}
+.vo{display:inline-flex;padding:10px 16px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(0,0,0,.25);color:var(--ink);font:500 14px "Noto Sans JP",sans-serif;cursor:pointer;margin-bottom:12px}
+.sl{display:block;font-size:14px;font-weight:500}
+.sl input{display:block;width:100%;margin-top:6px;accent-color:var(--apple);height:32px}
+.cmp{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;font-size:13px;margin:8px 0 12px;color:var(--mute)}
+.cmp b{display:block;height:9px;border-radius:2px;background:var(--apple);width:0}
+.cmp b.g{background:#8f9a98}
+.rst{padding:8px 14px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(0,0,0,.25);color:var(--ink);font:500 13px "Noto Sans JP",sans-serif;cursor:pointer}
+#tag{position:fixed;left:clamp(20px,5vw,72px);top:18px;font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#note{position:fixed;right:18px;top:18px;font-size:12px;color:var(--mute);background:rgba(10,15,19,.66);padding:5px 10px;border-radius:5px}
+#bar{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:3px;height:30vh;background:rgba(255,255,255,.22);border-radius:2px}
+#bar i{display:block;width:100%;height:0;background:var(--ink);border-radius:2px}
+#hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.8);transition:opacity .3s}
+#yr{position:fixed;left:68%;top:58px;transform:translateX(-50%);font-weight:900;font-size:clamp(24px,2.8vw,40px);white-space:nowrap;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.55);opacity:0;pointer-events:none}
+.tl{position:fixed;left:0;top:0;width:118px;margin-left:-59px;font-size:13px;font-weight:500;text-align:center;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.85);opacity:0;pointer-events:none;will-change:transform}
+.tl u{display:block;height:7px;margin-top:4px;background:rgba(10,15,19,.5);border-radius:2px;text-decoration:none;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.tl u i{display:block;height:100%;width:0;background:var(--apple)}
+#fade{position:fixed;inset:0;background:var(--night);opacity:0;pointer-events:none}
+#err{display:none;position:fixed;inset:0;padding:30px;background:var(--night);line-height:1.8}
+@media (max-width:760px),(max-aspect-ratio:1/1){
+ #scrim{background:linear-gradient(0deg,rgba(10,15,19,.95) 0,rgba(10,15,19,.84) 36%,rgba(10,15,19,0) 58%)}
+ .cap{left:20px;right:20px;top:auto;bottom:24px;transform:none;width:auto}
+ .cap h2{font-size:clamp(24px,7vw,34px)}
+ .cap p{font-size:14.5px;line-height:1.75}
+ #bar{display:none}
+ #tag{top:12px;left:14px;font-size:11px}
+ #note{top:32px;left:14px;right:14px;font-size:10.5px;padding:3px 8px}
+ #hint{bottom:6px}
+ #yr{left:50%;top:92px;font-size:24px}
+ .tl{width:84px;margin-left:-42px;font-size:11px}
+ .cmp{margin:4px 0 8px;font-size:12px}
+ .sl input{height:28px;margin-top:2px}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div id="scrim"></div>
+<div id="tag"></div>
+<div id="note"></div>
+<div id="bar"><i></i></div>
+<div id="yr"></div>
+<div id="labels"></div>
+<div id="fade"></div>
+<div id="caps"></div>
+<div id="hint">下へスクロール</div>
+<div id="scroll"></div>
+<div id="err">この図を表示できませんでした（お使いの端末で3D表示が使えないようです）。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+
+const S=await fetch('scene.json',{cache:'no-store'}).then(r=>r.json());
+document.getElementById('tag').textContent=S.tag;
+document.getElementById('note').textContent=S.note;
+const capsEl=document.getElementById('caps');
+let playEl=null,barN=null,barU=null,rstEl=null;
+S.chapters.forEach(ch=>{const s=document.createElement('section');s.className='cap';s.dataset.a=ch.a;s.dataset.b=ch.b;
+ s.innerHTML=`<h2>${ch.title}</h2><p>${ch.body}</p>`;
+ if(ch.voice){const b=document.createElement('button');b.className='vo';b.textContent='▶ 職人の声を聞く';const au=new Audio(ch.voice);b.onclick=()=>{au.paused?au.play():au.pause();};s.append(b);}
+ if(ch.play){const l=document.createElement('label');l.className='sl';l.textContent='切ってからの年';playEl=document.createElement('input');playEl.type='range';playEl.min=0;playEl.max=5.82;playEl.step=.01;playEl.value=0;playEl.setAttribute('aria-label','切ってからの年');l.append(playEl);s.append(l);
+  const c=document.createElement('div');c.className='cmp';c.innerHTML='<span>切らない木の実</span><div><b class="g"></b></div><span>この木の実</span><div><b></b></div>';s.append(c);[barN,barU]=c.querySelectorAll('b');
+  rstEl=document.createElement('button');rstEl.className='rst';rstEl.textContent='切る前にもどす';s.append(rstEl);}
+ capsEl.append(s);});
+
+// ── 木の計算 ── 毎年「①光を計算 ②根からの勢いを芽に配る ③芽の行き先を決める」をくり返す。結果は決め打ちしない
+const YSTART=-9,YEND=6,GX=40,GY=32,CELL=.2;
+const mkRng=s=>()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+const clamp=(x,a,b)=>x<a?a:x>b?b:x,sm=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+const P={il:.115,vcap:.82,rootMax:92,tipR:.0034,spurR:.0026,k:.9};
+function newTree(seed){return{rng:mkRng(seed),n:[],leaves:[],flowers:[],fruits:[],fruitBy:{},grid:{},root:2.2,lastFruit:0};}
+function addNode(T,par,x0,y0,z0,d,len,yr,shoot,idx,V,kind=0){const m=Math.hypot(d[0],d[1],d[2])||1,dx=d[0]/m,dy=d[1]/m,dz=d[2]/m;
+ const o={id:T.n.length,p:par?par.id:-1,x0,y0,z0,x1:x0+dx*len,y1:y0+dy*len,z1:z0+dz*len,dx,dy,dz,len,born:yr,dead:1e9,cut:false,kind,tip:false,bud:kind?0:1,shoot,idx,fromTip:0,V,ch:[],l:1,dark:0,weak:0,r:new Float32Array(YEND-YSTART+2),headed:false,fb:false,gs:0,ge:0,fall:0};
+ if(par)par.ch.push(o.id);T.n.push(o);return o;}
+function light(T,y){const nx=GX,ny=GY,D=new Float32Array(nx*ny*nx),S=new Float32Array(nx*ny*nx),id=(i,j,k)=>i+k*nx+j*nx*nx;
+ for(const a of T.n){if(a.dead<=y||a.cut)continue;const age=y-a.born,w=a.kind?1.5:age<=1?.8:.06;
+  const i=Math.floor(a.x1/CELL+nx/2),j=Math.floor(a.y1/CELL),k=Math.floor(a.z1/CELL+nx/2);if(i<0||k<0||j<0||i>=nx||k>=nx||j>=ny)continue;D[id(i,j,k)]+=w;}
+ let up=new Float32Array(nx*nx),tmp=new Float32Array(nx*nx);
+ for(let j=ny-1;j>=0;j--){
+  for(let k=0;k<nx;k++)for(let i=0;i<nx;i++){let s=0,c=0;for(let b=-1;b<=1;b++)for(let a=-1;a<=1;a++){const ii=i+a,kk=k+b;const w=(a||b)?.09:.28;c+=w;if(ii>=0&&kk>=0&&ii<nx&&kk<nx)s+=up[ii+kk*nx]*w;}tmp[i+k*nx]=s/c*.965;}
+  for(let q=0;q<nx*nx;q++){const v=tmp[q]+D[q+j*nx*nx]*P.k;tmp[q]=v;S[q+j*nx*nx]=v;}
+  [up,tmp]=[tmp,up];}
+ const L=new Float32Array(S.length);for(let q=0;q<L.length;q++)L[q]=Math.exp(-S[q]);return L;}
+function sampleL(L,x,y,z){const i=clamp(Math.floor(x/CELL+GX/2),0,GX-1),j=clamp(Math.floor(y/CELL)+1,0,GY-1),k=clamp(Math.floor(z/CELL+GX/2),0,GX-1);return L[i+k*GX+j*GX*GX];}
+function latDir(T,n){const a=(n.idx*2.399963)+T.rng()*.5;let ux=-n.dz,uy=0,uz=n.dx;let m=Math.hypot(ux,uz);if(m<.15){ux=1;uz=0;m=1;}ux/=m;uz/=m;
+ const vx=n.dy*uz-n.dz*uy,vy=n.dz*ux-n.dx*uz,vz=n.dx*uy-n.dy*ux,c=Math.cos(a),s=Math.sin(a);return[ux*c+vx*s+n.dx*.55,uy*c+vy*s+n.dy*.55,uz*c+vz*s+n.dz*.55];}
+function growShoot(T,from,d,V,y,sprout){const r=T.rng,n=Math.max(1,Math.round(V/P.il)),sid=from.tipShoot&&!sprout&&d===null?from.shoot:T.n.length;
+ let cur=from,dv=d||[from.dx,from.dy,from.dz],sidUse=d?T.n.length:from.shoot,start=d?0:from.idx+1,made=[];
+ for(let i=0;i<n;i++){const upk=sprout?.32:.012+.07*V;dv=[dv[0]+(r()-.5)*.34,dv[1]+(r()-.5)*.24+upk-(V<.35?.07:0),dv[2]+(r()-.5)*.34];const m=Math.hypot(...dv);dv=dv.map(q=>q/m);
+  if(cur.y1<.55&&dv[1]<.1)dv[1]=.25;
+  const a=addNode(T,cur,cur.x1,cur.y1,cur.z1,dv,P.il*(.9+r()*.2),y,sidUse,start+i,V);
+  a.gs=y+.3+.26*i/n;a.ge=y+.3+.26*(i+1)/n;made.push(a);cur=a;}
+ made.forEach((a,i)=>a.fromTip=made.length-1-i);cur.tip=true;return made;}
+function addSpur(T,n,y){const d=latDir(T,n),s=addNode(T,n,n.x1,n.y1,n.z1,d,.055,y,T.n.length,0,0,1);s.gs=y+.3;s.ge=y+.42;return s;}
+function step(T,y,keepGrid=false){const r=T.rng,L=light(T,y),alive=T.n.filter(a=>a.dead>y&&!a.cut);
+ if(y>=0){const g=new Uint8Array(L.length);for(let q=0;q<L.length;q++)g[q]=Math.round(L[q]*255);T.grid[y]=g;}
+ for(const a of alive)a.l=sampleL(L,a.x1,a.y1,a.z1);
+ T.root=Math.min(P.rootMax,T.root*1.5);
+ let B=T.root-T.lastFruit*.012;
+ const tips=[];
+ for(const a of alive){if(a.tip){if(a.l<.1){a.dark++;if(a.dark>=2){a.tip=false;continue;}}else a.dark=0;tips.push({n:a,d:null,w:1});}}
+ for(const a of alive){if(a.kind||a.tip)continue;const age=y-a.born,up=Math.max(0,a.dy),horiz=1-up*up;
+  if(a.headed){let q=a;for(let i=0;i<3&&q;i++){if(!q.kind&&(q.bud||i===0)&&r()<.9){q.bud=0;const d=latDir(T,q);d[1]+=.8;tips.push({n:q,d,w:2.1});}q=q.p>=0?T.n[q.p]:null;}a.headed=false;continue;}
+  if(age===1&&a.bud===1){const pS=clamp((a.V-.12)/.5,0,.9)*Math.exp(-a.fromTip/4.5),pP=.72*horiz*sm(.1,.45,a.l),u=r();
+   if(u<pS){a.bud=0;tips.push({n:a,d:latDir(T,a),w:.75});}else if(u<pS+pP){a.bud=0;addSpur(T,a,y);}else a.bud=2;}
+  else if(age>=2&&age<=3&&a.bud===2){if(r()<.22*horiz*sm(.15,.5,a.l)){a.bud=0;addSpur(T,a,y);}}}
+ // 勢いを配る（光のあたる芽・上向きの芽ほど多くもらう＝頂部優勢）
+ let W=0;for(const t of tips){const a=t.n,dy=t.d?t.d[1]:a.dy;t.W=t.w*Math.pow(a.l,1.2)*(.5+.8*Math.pow(Math.max(0,dy),1.6))*(a.y1>3.4?Math.max(.08,1-(a.y1-3.4)*1.25):1)*(a.shoot===0?.55:1)*(Math.hypot(a.x1,a.z1)>2.15?Math.max(.15,1-(Math.hypot(a.x1,a.z1)-2.15)*2):1);W+=t.W;}
+ let E=0;const new1=[];
+ for(const t of tips){let V=W>0?B*t.W/W:0;if(V>P.vcap){E+=V-P.vcap;V=P.vcap;}
+  const a=t.n;
+  if(!t.d&&V<.1){a.weak++;if(a.weak>=2){a.tip=false;addSpur(T,a,y);}continue;}
+  a.weak=0;if(!t.d)a.tip=false;new1.push(...growShoot(T,a,t.d,Math.max(V,.1),y,false));}
+ // 使いきれない勢いは、古い枝の眠っていた芽から「まっすぐな枝」になって出る
+ const cand=alive.filter(a=>!a.kind&&y-a.born>=2&&a.dy<.86&&a.r[y-YSTART]>=.012&&a.y1>.8&&a.l>.25);
+ let ns=Math.min(Math.round(E/.8)+(r()<.5?1:0),cand.length);
+ for(let i=0;i<ns;i++){const a=cand[Math.floor(r()*cand.length)];const V=.8+r()*.3;new1.push(...growShoot(T,a,[(r()-.5)*.25,1,(r()-.5)*.25],V,y,true));a.spr=true;}
+ // 花と実
+ let fr=0;for(const a of T.n){if(a.dead<=y||a.cut||!a.kind)continue;const age=y-a.born;
+  const lNow=age?a.l:sampleL(L,a.x1,a.y1,a.z1);
+  if(a.fb&&age>=1){T.flowers.push({x:a.x1,y:a.y1,z:a.z1,year:y});let set=lNow>.25&&r()<.8;if(set){T.fruits.push({x:a.x1,y:a.y1,z:a.z1,year:y,l:lNow,dx:a.dx,dz:a.dz});fr++;}a.fb=lNow>.35&&(!set||r()<.4);}
+  else a.fb=lNow>.35;
+  if(lNow<.14){a.dark++;if(a.dark>=2&&age>=1)a.dead=y+1;}else a.dark=0;}
+ T.fruitBy[y]=fr;T.lastFruit=fr;
+ // 葉
+ for(const a of T.n){if(a.dead<=y||a.cut)continue;if(a.kind){const q=y-a.born>=0;if(q)T.leaves.push({a:a.id,year:y,c:4});}else if(a.born===y)T.leaves.push({a:a.id,year:y,c:2});}
+ // 葉のない細い枝は枯れて落ちる
+ for(let i=T.n.length-1;i>=0;i--){const a=T.n[i];if(a.dead<=y+1||a.cut||a.tip||a.kind)continue;if(a.ch.some(c=>{const b=T.n[c];return b.dead>y+1&&!b.cut;}))continue;if(y-a.born>=1&&a.r[y-YSTART]<.02&&!a.keepStub)a.dead=y+1;}
+ // 太さ（パイプモデル）
+ const ix=y-YSTART+1;
+ for(let i=T.n.length-1;i>=0;i--){const a=T.n[i];if(a.cut){continue;}if(a.dead<=y)continue;let s=a.kind?P.spurR*P.spurR:a.tip?P.tipR*P.tipR:0;for(const c of a.ch){const b=T.n[c];if(b.cut||b.dead<=y)continue;const q=b.r[ix];s+=q*q;}if(!s)s=P.tipR*P.tipR;a.r[ix]=Math.max(a.r[ix-1]||0,Math.sqrt(s));}
+ for(const a of T.n)if(!a.r[ix])a.r[ix]=a.r[ix-1];
+}
+function buildBase(seed){const T=newTree(seed),r=T.rng,y=YSTART;
+ let c=null,idx=0;const lim=(n)=>{for(let i=0;i<n;i++){c=addNode(T,c,c?c.x1:0,c?c.y1:0,c?c.z1:0,[(r()-.5)*.1,1,(r()-.5)*.1],.2,y,0,idx++,1.2);c.bud=0;}};
+ lim(3);const A=[.5,2.3,4.1,5.5,1.3];for(let i=0;i<5;i++){const a=A[i],d=[Math.cos(a),.42+(i>2?.3:0),Math.sin(a)];const s=addNode(T,c,c.x1,c.y1,c.z1,d,.24,y,T.n.length,0,1.2);s.bud=0;s.tip=true;s.scaffold=true;lim(i<4?1:2);}
+ c.tip=true;
+ for(const a of T.n)a.r[0]=.012;
+ for(let yy=YSTART;yy<0;yy++)step(T,yy);
+ T.leaves=[];T.flowers=[];T.fruits=[];
+ return T;}
+function cloneTree(B,seed){const T=newTree(seed);T.root=B.root;T.lastFruit=B.lastFruit;T.n=B.n.map(a=>({...a,ch:a.ch.slice(),r:a.r.slice()}));return T;}
+const kids=(T,a,f)=>{f(a);for(const c of a.ch)kids(T,T.n[c],f);};
+function massOf(T,a){let m=0;kids(T,a,b=>{if(b.dead>0&&!b.cut)m+=b.kind?1:(b.born>=-1?.6:.05);});return m;}
+function cutWhole(T,a){kids(T,a,b=>{if(!b.cut&&b.dead>0){b.cut=true;b.fall=1;}});const p=T.n[a.p];}
+function cutThin(T){const all=T.n.filter(a=>a.dead>0&&!a.cut),tot=all.reduce((s,a)=>s+(a.kind?1:(a.born>=-1?.6:.05)),0),L=light(T,0);for(const a of all)a.l=sampleL(L,a.x1,a.y1,a.z1);
+ const heads=all.filter(a=>!a.kind&&a.p>=0&&T.n[a.p].shoot!==a.shoot&&!a.scaffold&&T.n[a.p].r[9]>.008);
+ const sc=[];for(const h of heads){let m=0,ls=0,c=0;kids(T,h,b=>{if(b.dead>0){const w=b.kind?1:(b.born>=-1?.6:.05);m+=w;ls+=b.l*w;c+=w;}});if(m<3||m>tot*.13)continue;const rad=Math.hypot(h.x0,h.z0)||1,inw=-(h.dx*h.x0+h.dz*h.z0)/rad;sc.push({h,m,s:Math.max(0,h.dy)*1.3+(1-ls/c)*1.2+inw*.7});}
+ sc.sort((a,b)=>b.s-a.s);let got=0;for(const q of sc){if(got>tot*.24)break;if(q.h.cut||got+q.m>tot*.3)continue;let par=q.h,bad=false;while(par.p>=0){par=T.n[par.p];if(par.cut)bad=true;}if(bad)continue;cutWhole(T,q.h);got+=q.m;}return got/tot;}
+function cutOver(T){const all=T.n,tot=all.filter(a=>a.dead>0).reduce((s,a)=>s+(a.kind?1:(a.born>=-1?.6:.05)),0);let got=0;
+ const cnt={};for(const a of all){if(a.dead<=0)continue;const pc=a.p>=0&&T.n[a.p].cut;if(pc){a.cut=true;a.fall=1;got+=a.kind?1:(a.born>=-1?.6:.05);continue;}if(a.p<0||a.kind)continue;
+  const young=a.born>=-2,rad=Math.hypot(a.x1,a.z1);let stop=false;if(young){stop=a.idx>=3;}else stop=(a.y1>2.6||rad>1.9);
+  if(a.scaffold)stop=false;if(stop){a.cut=true;a.fall=1;T.n[a.p].headed=true;T.n[a.p].keepStub=true;T.n[a.p].tip=false;got+=a.kind?1:(a.born>=-1?.6:.05);}}
+ return got/tot;}
+function runFuture(T){for(let y=0;y<YEND;y++)step(T,y);return T;}
+
+
+const canvas=document.getElementById('c');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});}
+catch(e){document.getElementById('err').style.display='block';throw e;}
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.18;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0xffffff,20,78);
+const camera=new THREE.PerspectiveCamera(36,1,.05,300);
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+const phone=innerWidth<760;
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
+const hsh=s=>{let x=s;return()=>{x=(x*16807)%2147483647;return(x-1)/2147483646;};};
+
+// ── 3本の木を計算する（同じ親の木から、切り方だけ変えて5年）
+const BASE=buildBase(S.seed);
+const mk=f=>{const T=cloneTree(BASE,S.growSeed);f&&f(T);return runFuture(T);};
+const TN=mk(null),TT=mk(cutThin),TO=mk(cutOver);
+const maxFruit=Math.max(1,...[TN,TT,TO].flatMap(T=>Object.values(T.fruitBy)));
+
+// ── 季節（t の小数部 0=真冬 → .25春 → .5夏 → .75秋）
+const K=[[0,'#5f81a6','#e6edf2','#7f9a55',1,1.7,'#cfd6e4','#c9d0d6'],[.15,'#5f88b2','#ecf0f1','#7f9a55',1,1.9,'#d4dbe6','#c9d0d6'],[.27,'#6aa0d4','#f6efe2','#7d9f4d',0,2.2,'#fff0dc','#6f8a55'],[.42,'#3f83c9','#d9eaf0','#5a8f3c',0,2.9,'#fff2dc','#3f6a35'],[.68,'#4b8ccc','#e3ecef','#5e8a38',0,2.7,'#fff0d4','#466f35'],[.82,'#5f8fc0','#f4dcb4','#8b8d44',0,2.3,'#ffe2b4','#68743a'],[.92,'#6283a8','#ecdfc8','#7f8450',.1,1.6,'#e4dccb','#88796a'],[1,'#5f81a6','#e6edf2','#7f9a55',1,1.7,'#cfd6e4','#c9d0d6']];
+const cA=new THREE.Color(),cB=new THREE.Color();
+const skyTop=new THREE.Color(),skyBot=new THREE.Color(),grassC=new THREE.Color(),sunC=new THREE.Color(),farC=new THREE.Color();
+function lerpC(o,a,b,f){cA.set(a);cB.set(b);o.copy(cA).lerp(cB,f);}
+const G={uSnow:{value:1},uGrass:{value:grassC},uSky1:{value:skyTop},uSky0:{value:skyBot}};
+
+// 空
+const sky=new THREE.Mesh(new THREE.SphereGeometry(200,24,16),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:{uSky1:G.uSky1,uSky0:G.uSky0},
+ vertexShader:`varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+ fragmentShader:`uniform vec3 uSky1,uSky0;varying vec3 vP;void main(){float h=clamp(normalize(vP).y*2.6,0.,1.);gl_FragColor=vec4(mix(uSky0,uSky1,pow(h,.72)),1.);
+ #include <colorspace_fragment>
+ }`}));scene.add(sky);
+
+// 地面（雪は「まだら」にとける）
+const groundM=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.95,envMapIntensity:.25});
+groundM.onBeforeCompile=s=>{s.uniforms.uSnow=G.uSnow;s.uniforms.uGrass=G.uGrass;
+ s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(position,1.)).xyz;');
+ s.fragmentShader=s.fragmentShader.replace('#include <common>',`#include <common>
+ varying vec3 vWP;uniform float uSnow;uniform vec3 uGrass;
+ float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float vn(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),u.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),u.x),u.y);}
+ float fb(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*vn(p);p=p*2.07+3.1;a*=.5;}return v;}`)
+ .replace('#include <color_fragment>',`#include <color_fragment>
+ float nA=fb(vWP.xz*.42),nB=fb(vWP.xz*6.);
+ vec3 gr=uGrass*(.7+.55*nB)*(.82+.4*nA);
+ float th=1.08-uSnow*1.2;float sk=smoothstep(th-.06,th+.06,nA*.9+nB*.14);
+ vec3 sn=mix(vec3(.86,.9,.97),vec3(.97,.98,1.),nB);
+ diffuseColor.rgb=mix(gr,sn,sk);`);};
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(400,400),groundM);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+
+// 遠くの山
+const farM=new THREE.MeshBasicMaterial({color:0xffffff,fog:false});
+function ridge(R,base,amp,seed,mat){const n=240,pos=[],idx=[];const r=hsh(seed);const ph=[r()*6,r()*6,r()*6];for(let i=0;i<=n;i++){const a=i/n*6.2832,h=base+amp*(.5+.5*Math.sin(a*3+ph[0]))*.6+amp*(.5+.5*Math.sin(a*7+ph[1]))*.3+amp*(.5+.5*Math.sin(a*17+ph[2]))*.1;pos.push(Math.cos(a)*R,-1,Math.sin(a)*R,Math.cos(a)*R,h,Math.sin(a)*R);if(i<n){const q=i*2;idx.push(q,q+1,q+2,q+2,q+1,q+3);}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);const m=new THREE.Mesh(g,mat);mat.side=THREE.DoubleSide;scene.add(m);return m;}
+const ridgeA=ridge(170,6,15,9301,farM),farM2=new THREE.MeshBasicMaterial({color:0xffffff,fog:false}),ridgeB=ridge(120,2,6,4721,farM2);
+
+// ── 枝の描画
+const branchMat=new THREE.MeshStandardMaterial({roughness:.92,envMapIntensity:.45});
+branchMat.onBeforeCompile=s=>{s.uniforms.uSnow=G.uSnow;
+ s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nattribute float aTaper;varying vec3 vWN,vWP;varying float vRad;')
+ .replace('#include <begin_vertex>',`#include <begin_vertex>
+ transformed.xz*=mix(1.,aTaper,clamp(position.y,0.,1.));
+ {mat3 im=mat3(instanceMatrix);vec3 q=normal/max(vec3(dot(im[0],im[0]),dot(im[1],im[1]),dot(im[2],im[2])),vec3(1e-9));vWN=normalize(im*q);vRad=length(im[0]);vWP=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;}`);
+ s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWN,vWP;varying float vRad;uniform float uSnow;')
+ .replace('#include <color_fragment>',`#include <color_fragment>
+ float ns=fract(sin(dot(floor(vWP*vec3(70.,24.,70.)),vec3(12.98,78.2,37.7)))*43758.5);diffuseColor.rgb*=.78+.34*ns;
+ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.94,.96,1.),uSnow*smoothstep(.3,.8,vWN.y)*(1.-smoothstep(.035,.06,vRad)));`);};
+const cylGeo=(rs)=>{const g=new THREE.CylinderGeometry(1,1,1.04,rs,1,rs<8);g.translate(0,.5,0);return g;};
+const leafG=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,.35,0,.34,0,.06,.72,-.35,0,.34,.22,0,.72,-.22,0,.72,0,.03,1],3));g.setIndex([0,1,2,0,2,3,1,4,2,3,2,5,4,6,2,2,6,5]);g.computeVertexNormals();return g;})();
+const flowerG=(()=>{const pos=[],idx=[];for(let i=0;i<5;i++){const a=i*1.2566,b=a+.5,c=a-.5,q=pos.length/3;pos.push(0,0,0,Math.cos(b)*.82,.05,Math.sin(b)*.82,Math.cos(a)*1.05,.1,Math.sin(a)*1.05,Math.cos(c)*.82,.05,Math.sin(c)*.82);idx.push(q,q+1,q+2,q,q+2,q+3);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;})();
+const appleG=(()=>{const P=[];for(let i=0;i<=10;i++){const a=i/10*Math.PI,r=Math.sin(a)*(1+.1*Math.cos(a)),y=Math.cos(a)*.88-.34*Math.pow(Math.max(0,Math.cos(a)),5)+.34*Math.pow(Math.max(0,-Math.cos(a)),5)*.5;P.push(new THREE.Vector2(Math.max(r,.001),y));}return new THREE.LatheGeometry(P,12);})();
+function seasonal(kind){
+ const m=new THREE.MeshStandardMaterial({roughness:kind==='apple'?.42:.72,side:kind==='apple'?THREE.FrontSide:THREE.DoubleSide,envMapIntensity:kind==='apple'?.35:.32});
+ if(kind==='leaf'){m.emissive=new THREE.Color(0xffffff);m.emissiveIntensity=0;}
+ if(kind==='flower'){m.emissive=new THREE.Color(0xfff0f0);m.emissiveIntensity=.72;m.roughness=.9;}
+ const scale=kind==='leaf'?`ss(aY+.28,aY+.42,uT)*(1.-ss(aY+.86,aY+.94,uT))*uLeafK`:kind==='flower'?`ss(aY+.21,aY+.26,uT)*(1.-ss(aY+.32,aY+.37,uT))`:`ss(aY+.36,aY+.7,uT)*(1.-ss(aY+.87,aY+.885,uT))`;
+ const vs=(s,cu)=>{s.uniforms.uT=cu.uT;s.uniforms.uLeafK=cu.uLeafK;
+  s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nattribute float aY;uniform float uT,uLeafK;varying float vK;float ss(float a,float b,float x){float t=clamp((x-a)/(b-a),0.,1.);return t*t*(3.-2.*t);}')
+  .replace('#include <begin_vertex>',`#include <begin_vertex>\nfloat sK=${scale};transformed*=sK;vK=${kind==='leaf'?'ss(aY+.7,aY+.86,uT)':kind==='apple'?'ss(aY+.6,aY+.8,uT)':'0.'};`);
+  s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying float vK;')
+  .replace('#include <color_fragment>',`#include <color_fragment>\n${kind==='leaf'?'diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.46,.36,.07),vK*.62);':kind==='apple'?'diffuseColor.rgb=mix(vec3(.5,.62,.2),diffuseColor.rgb,vK);':''}`);
+  if(kind==='leaf')s.fragmentShader=s.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*.3;');};
+ return{m,vs};}
+
+const GR=hsh(5417);
+class TreeView{
+ constructor(T,x,o={}){this.g=new THREE.Group();this.g.position.x=x;scene.add(this.g);this.u={uT:{value:0},uLeafK:{value:1}};this.meshes=[];this.o=o;this.set(T);}
+ set(T){for(const m of this.meshes){this.g.remove(m);m.geometry.dispose();m.dispose&&m.dispose();}this.meshes=[];this.T=T;
+  const ns=T.n,idx=[[],[]];for(const a of ns){a.isTh=a.r[a.r.length-1]>.022;idx[a.isTh?0:1].push(a);}
+  for(const a of ns){a.mc=-1;for(const c of a.ch){if(ns[c].shoot===a.shoot){a.mc=c;break;}}if(a.mc<0&&a.ch.length){let bc=a.ch[0];for(const c of a.ch)if((ns[c].r[ns[c].r.length-1]||0)>(ns[bc].r[ns[bc].r.length-1]||0))bc=c;a.mc=bc;}if(a.cut&&a.p>=0&&!ns[a.p].cut){const h=a.y0;kids(T,a,b=>b.dropH=h);}a.spr2=!a.kind&&a.born>=0&&a.dy>.68;}
+  this.br=idx.map((list,q)=>{const geo=cylGeo(q?5:12);const tap=new THREE.InstancedBufferAttribute(new Float32Array(list.length).fill(1),1);geo.setAttribute('aTaper',tap);
+   const m=new THREE.InstancedMesh(geo,branchMat,Math.max(1,list.length));m.count=list.length;m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1,list.length)*3),3);m.castShadow=true;m.receiveShadow=true;m.frustumCulled=false;m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.g.add(m);this.meshes.push(m);return{m,list,tap};});
+  this.rv=new Float32Array(ns.length);
+  // 葉
+  const lk=phone?.6:1,tmp=new THREE.Object3D(),col=new THREE.Color();const add=(geo,kind,recs,place,colr)=>{const sm=seasonal(kind);const mat=sm.m;mat.onBeforeCompile=s=>sm.vs(s,this.u);mat.customProgramCacheKey=()=>kind;
+   const g2=geo.clone(),n=recs.length,ay=new THREE.InstancedBufferAttribute(new Float32Array(n),1);g2.setAttribute('aY',ay);const m=new THREE.InstancedMesh(g2,mat,Math.max(1,n));m.count=n;m.frustumCulled=false;m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1,n)*3),3);m.castShadow=kind!=='flower';m.receiveShadow=kind==='leaf';
+   recs.forEach((r,i)=>{place(r,tmp);tmp.updateMatrix();m.setMatrixAt(i,tmp.matrix);ay.array[i]=r.year;colr(r,col);m.setColorAt(i,col);});
+   if(m.castShadow){const dm=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,side:THREE.DoubleSide});dm.onBeforeCompile=s=>sm.vs(s,this.u);dm.customProgramCacheKey=()=>'d'+kind;m.customDepthMaterial=dm;}
+   this.g.add(m);this.meshes.push(m);return m;};
+  const R=hsh(77317);const lrec=[];for(const q of T.leaves){const a=ns[q.a];const c=Math.max(1,Math.round(q.c*lk*(a.kind?1:1)));for(let i=0;i<c;i++)lrec.push({a,year:q.year,f:R(),u:R(),v:R(),w:R()});}
+  add(leafG,'leaf',lrec,(r,o)=>{const a=r.a,sx=a.x0+(a.x1-a.x0)*r.f,sy=a.y0+(a.y1-a.y0)*r.f,sz=a.z0+(a.z1-a.z0)*r.f;o.position.set(sx,sy,sz);o.rotation.set((r.u-.5)*1.3,r.v*6.283,(r.w-.5)*1.3);const q=(.12+.06*r.u)*(a.kind?1:1.08)*(phone?1.06:1);o.scale.set(q,q,q);},(r,c)=>{const l=Math.min(1,r.a.l*1.25);c.setRGB(.07+.12*l*r.u,.17+.2*l,.05+.03*r.v);});
+  const frec=[];for(const q of T.flowers){for(let i=0;i<(phone?3:5);i++)frec.push({...q,a:R()*6.28,b:R()});}
+  add(flowerG,'flower',frec,(r,o)=>{const d=.04+.04*r.b;o.position.set(r.x+Math.cos(r.a)*d,r.y+.02+.05*r.b,r.z+Math.sin(r.a)*d);o.rotation.set((r.b-.5)*1.1,r.a,(R()-.5)*1.1);o.scale.setScalar(.075);},(r,c)=>c.setRGB(1,.86+.08*r.b,.88+.08*r.b));
+  add(appleG,'apple',T.fruits,(r,o)=>{o.position.set(r.x+r.dx*.02,r.y-.06,r.z+r.dz*.02);o.rotation.set(0,R()*6,(R()-.5)*.5);o.scale.setScalar((.08+.024*Math.min(1,r.l))*(this.o.appleK||1));},(r,c)=>{const k=ss(.1,.42,r.l);c.setRGB(.6+.14*k,.24-.215*k,.05-.025*k);});
+  // 実のつく短い枝の印
+  if(this.o.marks){const sp=ns.filter(a=>a.kind&&a.dead>0&&!a.cut);const m=new THREE.InstancedMesh(new THREE.SphereGeometry(.0125,8,6),new THREE.MeshStandardMaterial({color:0xff4a35,emissive:0xd8301e,emissiveIntensity:.9,roughness:.4}),Math.max(1,sp.length));sp.forEach((a,i)=>{tmp.position.set(a.x1,a.y1,a.z1);tmp.rotation.set(0,0,0);tmp.scale.setScalar(1);tmp.updateMatrix();m.setMatrixAt(i,tmp.matrix);});m.visible=false;m.frustumCulled=false;this.g.add(m);this.meshes.push(m);this.markM=m;}
+  this.dirty=true;this.last='';
+ }
+ update(t,o={}){const key=[t.toFixed(4),o.cutK||0,o.cutNew??1,o.hl||0,o.age||0,o.spr||0,o.pick?o.pick.size:-1,this.ver||0].join();this.u.uT.value=t;this.u.uLeafK.value=o.leafK??1;if(key===this.last&&!this.dirty)return;this.last=key;this.dirty=false;
+  const T=this.T,ns=T.n,y=Math.floor(Math.min(t,5.999)),iy=y-YSTART,fr=Math.min(t,5.999)-y,rk=ss(.3,.82,fr),rv=this.rv,cutK=o.cutK||0,hl=o.hl||0,age=o.age||0,spr=o.spr||0,pick=o.pick;
+  for(let i=0;i<ns.length;i++){const a=ns[i];let r0=a.r[iy],r1=a.r[iy+1];if(!r0)r0=r1;rv[i]=Math.max((r0+(r1-r0)*rk)*1.18,.0062+(o.age||0)*.0055);}
+  const K2=cutK*cutK,KN=(o.cutNew??1)**2;
+  for(const b of this.br){const A=b.m.instanceMatrix.array,C=b.m.instanceColor.array,Tp=b.tap.array,li=b.list;
+   for(let i=0;i<li.length;i++){const a=li[i],o16=i*16;let f=t>=a.ge?1:t<=a.gs?0:(t-a.gs)/(a.ge-a.gs);let rr=rv[a.id];
+    if(a.dead<1e8)rr*=1-ss(a.dead-.08,a.dead,t);
+    if(a.dead<=0)f=0;
+    let px=a.x0,py=a.y0,pz=a.z0,dy=a.dy,dl=a.len*f,cr=.34,cg=.25,cb=.2;
+    const ag=y-a.born;
+    if(ag<=1){cr=.42;cg=.2;cb=.13;}else if(ag<=3){cr=.37;cg=.23;cb=.16;}
+    if(a.kind){cr=.3;cg=.22;cb=.16;}
+    if(a.cut){const kk=a.cutNew?KN:K2;if(cutK>=1&&t>.2)f=0;else{py=a.y0*(1-kk)+.015;dy=a.dy*(1-kk);if(a.cutNew&&(o.cutNew??1)<1){cr=.95;cg=.12;cb=.08;}if(hl>0){cr=cr+(.95-cr)*hl;cg=cg+(.12-cg)*hl;cb=cb+(.08-cb)*hl;}}dl=a.len*f;}
+    if(age>0){const yg=ag<=1;const tr=a.kind?.95:yg?.2:.92,tg=a.kind?.18:yg?.78:.68,tb=a.kind?.12:yg?.95:.2;cr+=(tr-cr)*age;cg+=(tg-cg)*age;cb+=(tb-cb)*age;}
+    if(spr>0&&a.spr2){cr+=(.98-cr)*spr;cg+=(.74-cg)*spr;cb+=(.16-cb)*spr;}
+    if(pick&&pick.has(a.id)){cr=.98;cg=.2;cb=.1;}
+    if(f<=0||rr<=1e-5){rr=1e-5;dl=1e-5;}
+    A[o16]=a.ux*rr;A[o16+1]=a.uy*rr;A[o16+2]=a.uz*rr;A[o16+3]=0;
+    A[o16+4]=a.dx*dl;A[o16+5]=dy*dl;A[o16+6]=a.dz*dl;A[o16+7]=0;
+    A[o16+8]=a.wx*rr;A[o16+9]=a.wy*rr;A[o16+10]=a.wz*rr;A[o16+11]=0;
+    A[o16+12]=px;A[o16+13]=py;A[o16+14]=pz;A[o16+15]=1;
+    C[i*3]=cr;C[i*3+1]=cg;C[i*3+2]=cb;
+    Tp[i]=a.mc>=0?Math.min(1,Math.max(.45,rv[a.mc]/rv[a.id])):(a.kind?.8:.55);}
+   b.m.instanceMatrix.needsUpdate=true;b.m.instanceColor.needsUpdate=true;b.tap.needsUpdate=true;}
+  if(this.markM)this.markM.visible=age>.02;if(this.markM&&age>.02){this.markM.material.opacity=age;}
+ }
+}
+function basis(T){for(const a of T.n){let ux=-a.dz,uy=0,uz=a.dx,m=Math.hypot(ux,uz);if(m<.05){ux=1;uz=0;m=1;}ux/=m;uz/=m;a.ux=ux;a.uy=uy;a.uz=uz;a.wx=a.dy*uz-a.dz*uy;a.wy=a.dz*ux-a.dx*uz;a.wz=a.dx*uy-a.dy*ux;}return T;}
+[TN,TT,TO].forEach(basis);
+const SP=()=>portrait?4.4:5.7;
+let W=0,H=0,portrait=false;
+const vN=new TreeView(TN,-5.7),vT=new TreeView(TT,0,{marks:true}),vO=new TreeView(TO,5.7,{appleK:.8});
+let TU=basis(mk(null)),userCuts=[];
+const vU=new TreeView(TU,0,{appleK:.62});vU.g.visible=false;
+
+// 遠くの畑の木（枝の太いところだけ＋葉の塊）
+{const base=BASE.n.filter(a=>a.r[9]>.02);const pos=[];const geoms=[];const dummy=new THREE.Object3D();
+ const cyl=new THREE.CylinderGeometry(1,1,1,5,1,true);cyl.translate(0,.5,0);
+ const inst=new THREE.InstancedMesh(cyl,new THREE.MeshStandardMaterial({color:0x4b3d33,roughness:.95,envMapIntensity:.2}),base.length*60);
+ const blob=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,envMapIntensity:.15}),60*30);
+ window.__blob=blob;
+ const r=hsh(991),m=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),dd=new THREE.Vector3(),pp=new THREE.Vector3(),ss3=new THREE.Vector3();let bi=0,ti=0;
+ for(let row=0;row<3;row++)for(let c=0;c<12;c++){const X=(c-5.5)*6.4+(row%2?3.2:0)+r()*.5,Z=-27-row*9+r()*.6,rot=r()*6.28,sc=.85+.25*r();
+  const R=new THREE.Matrix4().makeRotationY(rot),TT2=new THREE.Matrix4().makeTranslation(X,0,Z),Sx=new THREE.Matrix4().makeScale(sc,sc,sc),W2=TT2.multiply(R).multiply(Sx);
+  for(const a of base){dd.set(a.dx,a.dy,a.dz);q.setFromUnitVectors(up,dd);const rad=Math.max(a.r[9]*1.2,.025);pp.set(a.x0,a.y0,a.z0);ss3.set(rad,a.len,rad);m.compose(pp,q,ss3);m.premultiply(W2);inst.setMatrixAt(ti++,m);}
+  for(let b=0;b<30;b++){const ax=r()*6.28,ra=Math.sqrt(r())*2.05,hh=1.75+r()*1.55*(1-.45*ra/2.05);pp.set(Math.cos(ax)*ra,hh,Math.sin(ax)*ra);q.setFromAxisAngle(up,r()*6.28);const sb=.2+r()*.26;ss3.set(sb,sb*.72,sb);m.compose(pp,q,ss3);m.premultiply(W2);blob.setMatrixAt(bi,m);const lum=.72+r()*.5;blob.setColorAt(bi++,new THREE.Color(lum,lum,lum));}}
+ inst.count=ti;blob.count=bi;inst.frustumCulled=blob.frustumCulled=false;scene.add(inst,blob);}
+
+// ── 光の輪切り（計算した光の格子をそのまま見せる）
+function sliceFor(T,x){const g=T.grid[0],tx=new THREE.Data3DTexture(g,GX,GX,GY);tx.format=THREE.RedFormat;tx.type=THREE.UnsignedByteType;tx.minFilter=tx.magFilter=THREE.NearestFilter;tx.unpackAlignment=1;tx.needsUpdate=true;
+ const u={uV:{value:tx},uZ:{value:0},uO:{value:0}};
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(GX*CELL,GY*CELL),new THREE.ShaderMaterial({uniforms:u,transparent:true,depthWrite:false,side:THREE.DoubleSide,fog:false,glslVersion:THREE.GLSL3,
+  vertexShader:`out vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`precision highp sampler3D;uniform sampler3D uV;uniform float uZ,uO;in vec3 vP;out vec4 oc;
+  void main(){vec3 q=vec3(vP.x/${(GX*CELL).toFixed(2)}+.5,uZ/${(GX*CELL).toFixed(2)}+.5,(vP.y+${(GY*CELL/2).toFixed(2)})/${(GY*CELL).toFixed(2)});float l=texture(uV,q).r;
+   vec3 c=mix(vec3(.015,.02,.16),vec3(.55,.1,.48),smoothstep(.05,.42,l));c=mix(c,vec3(1.,.74,.12),smoothstep(.42,.86,l));
+   vec2 ce=fract(vec2(q.x*${GX}.,q.z*${GY}.));vec2 gp=step(vec2(.07),ce)*step(ce,vec2(.93));float y0=vP.y+${(GY*CELL/2).toFixed(2)};float a=step(l,.93)*gp.x*gp.y*step(.5,y0)*.9;oc=vec4(c,a*uO);if(oc.a<.003)discard;
+   #include <colorspace_fragment>
+   }`.replace('#include <colorspace_fragment>','oc.rgb=pow(oc.rgb,vec3(1./1.6));')}));
+ m.position.set(0,GY*CELL/2,0);m.renderOrder=6;m.visible=false;x.g.add(m);return{m,u};}
+const slN=sliceFor(TN,vN),slT=sliceFor(TT,vT);
+
+// 光
+const hemi=new THREE.HemisphereLight(0xffffff,0x6a6a5a,1);scene.add(hemi);
+const key=new THREE.DirectionalLight(0xffffff,2.4);key.position.set(9,15,11);key.castShadow=true;key.shadow.mapSize.set(phone?1024:2048,phone?1024:2048);
+Object.assign(key.shadow.camera,{left:-13,right:13,top:13,bottom:-13,near:1,far:50});key.shadow.bias=-.0004;key.shadow.normalBias=.02;key.shadow.radius=3;scene.add(key,key.target);
+
+function envAt(t){const f=((t%1)+1)%1;let i=0;while(i<K.length-2&&f>K[i+1][0])i++;const a=K[i],b=K[i+1],q=(f-a[0])/(b[0]-a[0]);
+ lerpC(skyTop,a[1],b[1],q);lerpC(skyBot,a[2],b[2],q);lerpC(grassC,a[3],b[3],q);lerpC(sunC,a[6],b[6],q);
+ const sn=a[4]+(b[4]-a[4])*q;G.uSnow.value=sn;key.intensity=a[5]+(b[5]-a[5])*q;key.color.copy(sunC);
+ hemi.intensity=.75+.25*key.intensity/3;scene.fog.color.copy(skyBot);
+ lerpC(farC,'#7f97ad','#7f97ad',0);farM.color.copy(skyBot).lerp(skyTop,.62);farM2.color.copy(skyBot).lerp(skyTop,.8).lerp(grassC,.28*(1-sn)).multiplyScalar(.82);
+ lerpC(cA,a[7],b[7],q);if(window.__blob){window.__blob.material.color.copy(cA).multiplyScalar(.5);const leaf=ss(.34,.4,f)*(1-ss(.87,.95,f));window.__blob.visible=leaf>.05;window.__blob.scale.setScalar(1);}}
+
+// カメラ
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const camKeys=[
+ {p:0,c:V(11.5,2,20.5),l:V(-.1,2.75,0)},{p:.1,c:V(10.8,2,19.2),l:V(-.1,2.75,0)},
+ {p:.135,c:V(11.2,2.2,19.6),l:V(.1,2.55,0)},{p:.23,c:V(10.8,2.2,18.9),l:V(.1,2.55,0)},
+ {p:.255,c:V(2.2,2.15,5.6),l:V(-.35,1.75,.2)},{p:.335,c:V(1.9,2.2,5),l:V(-.3,1.8,.2)},
+ {p:.365,c:V(-.9,2.2,17.5),l:V(-3.4,2.3,0)},{p:.47,c:V(-.9,2.2,16.9),l:V(-3.4,2.3,0)},
+ {p:.5,c:V(12,1.9,22),l:V(.1,3.1,0)},{p:.72,c:V(11.5,1.9,21),l:V(.1,3.1,0)},
+ {p:.75,c:V(9,2.3,7.6),l:V(5.7,2,0)},{p:.85,c:V(8.4,2.3,6.8),l:V(5.7,2.1,0)},
+ {p:.87,c:V(3.5,2.5,7.4),l:V(0,1.8,0)},{p:1,c:V(3.3,2.5,7.2),l:V(0,1.8,0)}];
+const cp=new THREE.Vector3(),cl=new THREE.Vector3();
+function camAt(p){let i=0;while(i<camKeys.length-2&&p>camKeys[i+1].p)i++;const a=camKeys[i],b=camKeys[i+1],t=ss(a.p,b.p,p);cp.copy(a.c).lerp(b.c,t);cl.copy(a.l).lerp(b.l,t);}
+
+const caps=[...document.querySelectorAll('.cap')].map(el=>({el,a:+el.dataset.a,b:+el.dataset.b}));
+const hint=document.getElementById('hint'),barI=document.querySelector('#bar i'),yrEl=document.getElementById('yr'),fadeEl=document.getElementById('fade');
+// 木の名札
+const lab=[vN,vT,vO].map((v,i)=>{const d=document.createElement('div');d.className='tl';d.innerHTML=`<span>${S.trees[i].name}</span><u><i></i></u>`;document.getElementById('labels').append(d);return{v,d,bar:d.querySelector('i'),trk:d.querySelector('u'),T:v.T};});
+function resize(){W=innerWidth;H=innerHeight;portrait=W<=760||W/H<=1;renderer.setSize(W,H,false);camera.aspect=W/H;camera.fov=portrait?52:36;
+ if(portrait)camera.setViewOffset(W,H,0,H*.2,W,H);else camera.setViewOffset(W,H,-W*.17,0,W,H);camera.updateProjectionMatrix();
+ vN.g.position.x=-SP();vO.g.position.x=SP();}
+addEventListener('resize',resize);resize();
+
+const season=f=>f<.2?'冬':f<.38?'春':f<.68?'夏':f<.9?'秋':'冬';
+const tv=new THREE.Vector3();
+let userT=0,playing=null,hoverSet=null,inPlay=false,cutStart=0,playT=0;
+function fruitAt(T,t){const y=Math.floor(Math.min(t,5.999)),f=t-y;return f>.5?(T.fruitBy[y]||0):(T.fruitBy[y-1]||0);}
+function apply(p,now){
+ // 時間：切った冬(0)→夏で光→5年
+ let t=0;
+ if(p>=.335)t=.55*ss(.335,.375,p);
+ if(p>=.47)t=.55+(5.82-.55)*Math.min(1,(p-.47)/(.715-.47));
+ if(p>=.715)t=5.82+(5.99-5.82)*ss(.715,.75,p);
+ const play=p>=.87;inPlay=play;
+ envAt(play?userT:t);
+ const thinK=ss(.15,.185,p),overK=ss(.185,.22,p);
+ const hlT=ss(.135,.15,p)*(1-thinK),hlO=ss(.17,.185,p)*(1-overK);
+ const age=ss(.25,.27,p)*(1-ss(.325,.345,p));
+ const sliceOn=ss(.37,.395,p)*(1-ss(.455,.48,p));
+ const spr=ss(.76,.79,p)*(1-ss(.85,.87,p));
+ const lk=1-.78*sliceOn;
+ vN.update(t,{leafK:lk});vT.update(t,{cutK:thinK,hl:hlT,age,leafK:lk});vO.update(t,{cutK:overK,hl:hlO,spr,leafK:lk});
+ vU.g.visible=play;vN.g.visible=vT.g.visible=vO.g.visible=!play;
+ if(play){const cn=cutStart?ss(.12,.62,(now-cutStart)/1000):1;vU.update(userT,{cutK:1,cutNew:cn,pick:hoverSet});}
+ slN.m.visible=slT.m.visible=sliceOn>.002;
+ if(sliceOn>.002){const z=1.5-1.5*ss(.375,.42,p);for(const s of[slN,slT]){s.u.uO.value=sliceOn;s.u.uZ.value=z;s.m.position.z=z;}}
+ fadeEl.style.opacity=ss(.85,.865,p)*(1-ss(.87,.885,p));
+ camAt(p);
+ if(portrait){const dS=5.7-SP(),b=ss(.115,.135,p)*(1-ss(.23,.255,p)),sl=ss(.34,.365,p)*(1-ss(.47,.5,p)),ov=ss(.72,.75,p)*(1-ss(.85,.87,p));
+  cl.x+=-1.2*b+dS*.5*sl-dS*ov;cp.x+=-1.2*b*1.8+dS*.5*sl-dS*ov;
+  const d=cp.clone().sub(cl);camera.position.copy(cl).add(d.multiplyScalar(p>.24&&p<.34?1.12:(p>.86?1.28:p>.73?1.1:1.32+.28*b)));}else camera.position.copy(cp);
+ camera.lookAt(cl);
+ // 年と名札
+ const lapse=p>.47&&p<.75,yy=Math.floor(Math.min(t,5.99)),ff=t-yy;
+ const yU=Math.floor(Math.min(userT,5.99)),fU=userT-yU;yrEl.style.opacity=play?ss(.885,.9,p):ss(.475,.49,p)*(1-ss(.72,.735,p));
+ if(+yrEl.style.opacity>0)yrEl.textContent=play?(yU===0?'切った年':yU+'年後')+'の'+season(fU):(yy===0?'切った年':yy+'年後')+'の'+season(ff);
+ for(const q of lab){const show=(q.v===vT?ss(.135,.15,p):q.v===vO?ss(.17,.185,p):ss(.135,.15,p))*(1-ss(.232,.245,p))+ss(.48,.5,p)*(1-ss(.725,.74,p))+(q.v!==vO?ss(.385,.4,p)*(1-ss(.455,.47,p)):0)+(q.v===vO?ss(.755,.78,p)*(1-ss(.85,.865,p)):0);
+  q.d.style.opacity=Math.min(1,show);q.trk.style.visibility=(p>.48&&p<.74)?'visible':'hidden';
+  if(show>.01){tv.set(q.v.g.position.x,5.15,0);tv.project(camera);q.d.style.transform=`translate(${(tv.x*.5+.5)*W}px,${(-tv.y*.5+.5)*H-34}px)`;q.bar.style.width=(fruitAt(q.T,t)/maxFruit*100)+'%';}}
+ if(play){barN.style.width=(fruitAt(TN,userT)/maxFruit*100)+'%';barU.style.width=(fruitAt(TU,userT)/maxFruit*100)+'%';}
+ for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
+}
+// ── 触るところ：枝を切る→計算し直す→5年すすむ
+function pickBranch(cx,cy){if(userT>.14)return null;let best=-1,bd=phone?34:24;const ns=TU.n;for(const a of ns){if(a.born>=0||a.dead<=0||a.cut||a.shoot===0)continue;tv.set(a.x1,a.y1,a.z1);tv.project(camera);const x=(tv.x*.5+.5)*W,y=(-tv.y*.5+.5)*H,d=Math.hypot(x-cx,y-cy);if(d<bd){bd=d;best=a.id;}}
+ if(best<0)return null;let a=ns[best];while(a.kind&&a.p>=0)a=ns[a.p];const up=q=>{while(q.p>=0&&ns[q.p].shoot===q.shoot)q=ns[q.p];return q;};let h=up(a);
+ const size=q=>{let c=0;kids(TU,q,b=>{if(b.born<0)c++;});return c;};while(size(h)<26&&h.p>=0&&ns[h.p].shoot!==0)h=up(ns[h.p]);
+ return h.shoot===0?null:h.id;}
+function setPick(id){if(id==null){hoverSet=null;return;}const s=new Set();kids(TU,TU.n[id],b=>{if(b.born<0)s.add(b.id);});hoverSet=s;}
+function rebuildUser(){const T=cloneTree(BASE,S.growSeed);for(const id of userCuts)cutWhole(T,T.n[id]);runFuture(T);basis(T);TU=T;if(userCuts.length)kids(T,T.n[userCuts[userCuts.length-1]],b=>{if(b.born<0)b.cutNew=true;});vU.set(T);hoverSet=null;}
+function stopPlay(){if(playing)cancelAnimationFrame(playing);playing=null;}
+function playFwd(){stopPlay();if(prm){userT=5.82;playEl.value=userT;return;}const st=performance.now(),a=userT;(function s(n){const k=Math.min(1,(n-st)/6500);userT=a+(5.82-a)*k;playEl.value=userT;if(k<1)playing=requestAnimationFrame(s);else playing=null;})(st);}
+playEl.addEventListener('input',()=>{clearTimeout(playT);stopPlay();userT=+playEl.value;});
+rstEl.addEventListener('click',()=>{clearTimeout(playT);cutStart=0;stopPlay();userCuts=[];rebuildUser();userT=0;playEl.value=0;});
+let dn=null;
+addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:performance.now()};});
+addEventListener('pointermove',e=>{if(!inPlay||e.pointerType==='touch'||e.target.closest&&e.target.closest('.cap'))return;setPick(pickBranch(e.clientX,e.clientY));});
+addEventListener('pointerup',e=>{if(!dn||!inPlay)return;const mv=Math.hypot(e.clientX-dn.x,e.clientY-dn.y),dt=performance.now()-dn.t;dn=null;if(mv>10||dt>600||(e.target.closest&&e.target.closest('.cap')))return;
+ if(userT>.14){clearTimeout(playT);stopPlay();userT=0;playEl.value=0;return;}
+ const id=pickBranch(e.clientX,e.clientY);if(id==null)return;userCuts.push(id);rebuildUser();cutStart=performance.now();stopPlay();clearTimeout(playT);playT=setTimeout(playFwd,prm?0:750);});
+
+const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prog=()=>{const m=document.documentElement.scrollHeight-innerHeight;return m>0?Math.min(1,Math.max(0,scrollY/m)):0;};
+let cur=prog(),last=performance.now(),frozen=null;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+ const target=frozen??prog();cur+=(target-cur)*(frozen!==null||prm?1:Math.min(1,dt*5));
+ apply(cur,now);renderer.render(scene,camera);requestAnimationFrame(frame);}
+window.__seek=p=>{frozen=p;cur=p;apply(p,0);renderer.render(scene,camera);return renderer.info.render.triangles;};
+window.__release=()=>{frozen=null;};
+window.__stats=()=>({none:TN.fruitBy,thin:TT.fruitBy,over:TO.fruitBy,user:TU.fruitBy,cuts:userCuts.length,nodes:[TN,TT,TO].map(T=>T.n.length),leaves:[TN,TT,TO].map(T=>T.leaves.length)});
+const q=new URLSearchParams(location.search);
+if(q.has('p'))frozen=+q.get('p');
+if(q.has('t')){userT=+q.get('t');playEl.value=userT;}
+if(q.has('auto')){const s=+q.get('auto')||70,st=performance.now();(function a(n){const m=document.documentElement.scrollHeight-innerHeight,k=(n-st)/(s*1000);scrollTo(0,m*Math.min(1,k));if(k<1)requestAnimationFrame(a);})(st);}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

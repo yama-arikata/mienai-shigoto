@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>津軽塗の見えない層｜見えない仕事サンプル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#f6f1e7;--mute:#cfc7b8;--shu:#ef5b3f;--night:#100c0a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Noto Sans JP",system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#scroll{height:1100vh}
+#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(13,9,7,.93) 0,rgba(13,9,7,.76) 34%,rgba(13,9,7,0) 60%)}
+.cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none}
+.cap h2{margin:0 0 .55em;font-weight:900;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
+.cap p{margin:0 0 .9em;font-size:clamp(15px,1.25vw,18px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
+.cap em{font-style:normal;color:var(--shu)}
+.vo{display:inline-flex;padding:10px 16px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(0,0,0,.25);color:var(--ink);font:500 14px "Noto Sans JP",sans-serif;cursor:pointer;margin-bottom:12px}
+.sl{display:block;font-size:14px;font-weight:500}
+.sl input{display:block;width:100%;margin-top:10px;accent-color:var(--shu);height:32px}
+#tag{position:fixed;left:clamp(20px,5vw,72px);top:18px;font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#note{position:fixed;right:18px;top:18px;font-size:12px;color:var(--mute);background:rgba(13,9,7,.6);padding:5px 10px;border-radius:5px}
+#bar{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:3px;height:30vh;background:rgba(255,255,255,.16);border-radius:2px}
+#bar i{display:block;width:100%;height:0;background:var(--ink);border-radius:2px}
+#hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);font-size:13px;color:var(--mute);transition:opacity .3s}
+#err{display:none;position:fixed;inset:0;padding:30px;background:var(--night);line-height:1.8}
+@media (max-width:760px),(max-aspect-ratio:1/1){
+ #scrim{background:linear-gradient(0deg,rgba(13,9,7,.95) 0,rgba(13,9,7,.84) 36%,rgba(13,9,7,0) 58%)}
+ .cap{left:20px;right:20px;top:auto;bottom:24px;transform:none;width:auto}
+ .cap h2{font-size:clamp(24px,7vw,34px)}
+ .cap p{font-size:14.5px;line-height:1.75}
+ #bar{display:none}
+ #tag{top:12px;left:14px;font-size:11px}
+ #note{top:32px;left:14px;right:14px;font-size:10.5px;padding:3px 8px}
+ #hint{bottom:6px}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div id="scrim"></div>
+<div id="tag"></div>
+<div id="note"></div>
+<div id="bar"><i></i></div>
+<div id="caps"></div>
+<div id="hint">下へスクロール</div>
+<div id="scroll"></div>
+<div id="err">この図を表示できませんでした（お使いの端末で3D表示が使えないようです）。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const S=await fetch('scene.json',{cache:'no-store'}).then(r=>r.json());
+document.getElementById('tag').textContent=S.tag;
+document.getElementById('note').textContent=S.note;
+const capsEl=document.getElementById('caps');
+let sliderEl=null;
+S.chapters.forEach(ch=>{const s=document.createElement('section');s.className='cap';s.dataset.a=ch.a;s.dataset.b=ch.b;
+ s.innerHTML=`<h2>${ch.title}</h2><p>${ch.body}</p>`;
+ if(ch.voice){const b=document.createElement('button');b.className='vo';b.textContent='▶ 職人の声を聞く';const au=new Audio(ch.voice);b.onclick=()=>{au.paused?au.play():au.pause();};s.append(b);}
+ if(ch.slider){const l=document.createElement('label');l.className='sl';l.textContent='研ぐ深さ';sliderEl=document.createElement('input');sliderEl.type='range';sliderEl.min=0;sliderEl.max=1;sliderEl.step=.001;sliderEl.value=.5;sliderEl.setAttribute('aria-label','研ぐ深さ');l.append(sliderEl);s.append(l);}
+ capsEl.append(s);});
+
+const canvas=document.getElementById('c');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});}
+catch(e){document.getElementById('err').style.display='block';throw e;}
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x100c0a);
+const camera=new THREE.PerspectiveCamera(36,1,.05,80);
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+
+const phone=innerWidth<760;
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
+function tex(size,draw,rx=1,ry=1){const c=document.createElement('canvas');c.width=c.height=size;draw(c.getContext('2d'),size);
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
+
+// 板の大きさと層の厚み（見やすく誇張）
+const BW=6.4,BD=4.2,A=.27,TH=.05,N=S.coats.length;
+
+// 仕掛けの山を高さの表にする
+const HS=phone?1024:2048,hf=new Float32Array(HS*HS);
+(function(){const n=phone?S.spikesPhone:S.spikes;
+ for(let k=0;k<n;k++){const cx=rnd(HS),cy=rnd(HS),big=Math.random()<.14,r=(big?rnd(22,54):rnd(5,20))*HS/2048,tall=big?rnd(.55,1):rnd(.24,.68),st=rnd(.55,.95),an=rnd(6.28),sq=rnd(.45,1),p1=rnd(6.28),p2=rnd(6.28),a1=rnd(.1,.34),a2=rnd(.04,.2);
+  const R=Math.ceil(r*1.5),ca=Math.cos(an),sa=Math.sin(an);
+  for(let y=-R;y<=R;y++)for(let x=-R;x<=R;x++){const ix=(Math.round(cx)+x+HS)%HS,iy=(Math.round(cy)+y+HS)%HS,u=(x*ca+y*sa)/r,v=(-x*sa+y*ca)/(r*sq),d=Math.sqrt(u*u+v*v);if(d>=1)continue;
+   const th=Math.atan2(v,u),w=Math.sin(th*3+p1)*a1+Math.sin(th*7+p2)*a2,h=tall*Math.pow(Math.max(0,1-d*(1+w)),st);const i=iy*HS+ix;if(h>hf[i])hf[i]=h;}}})();
+const hd=new Uint16Array(HS*HS);for(let i=0;i<hd.length;i++)hd[i]=THREE.DataUtils.toHalfFloat(hf[i]);
+const hTex=new THREE.DataTexture(hd,HS,HS,THREE.RedFormat,THREE.HalfFloatType);hTex.wrapS=hTex.wrapT=THREE.ClampToEdgeWrapping;hTex.minFilter=hTex.magFilter=THREE.LinearFilter;hTex.needsUpdate=true;
+
+const pal=S.coats.map(c=>new THREE.Color(c));
+const coreC=new THREE.Color(S.core);
+const U={uH:{value:hTex},uA:{value:0},uSweep:{value:-.2},uT:{value:TH},uCoats:{value:0},uL:{value:9},uGloss:{value:.1},uPal:{value:pal},uCore:{value:coreC},uTop:{value:new THREE.Color(0x8a7a66)},uN:{value:N},uTexel:{value:1/HS}};
+const common=`uniform sampler2D uH;uniform float uA,uSweep,uT,uCoats,uL,uGloss,uN;uniform vec3 uPal[${N}],uCore,uTop;
+float bump(vec2 uv){return uA*(1.-smoothstep(uSweep-.02,uSweep+.02,uv.x))*texture2D(uH,uv).r;}
+float top(vec2 uv){float t=bump(uv)+uT*uCoats;return min(t,uL);}
+vec3 layerCol(float k,float aa){float i=floor(k);int a=int(clamp(i,0.,uN-1.));vec3 c=uPal[a];
+ if(k<0.)c=uCore;return c;}`;
+
+// 上面
+const G=phone?420:760;
+const topGeo=new THREE.PlaneGeometry(BW,BD,G,Math.round(G*BD/BW));topGeo.rotateX(-Math.PI/2);
+const topMat=new THREE.ShaderMaterial({uniforms:U,vertexShader:common+`varying vec2 vU;varying vec3 vW;
+ void main(){vU=uv;vec3 p=position;p.y=top(uv);vec4 w=modelMatrix*vec4(p,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:common+`uniform float uTexel;varying vec2 vU;varying vec3 vW;
+ float hs(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+ void main(){float e=uTexel*1.6,hN=top(vU);
+  float dx=(top(vU+vec2(e,0.))-top(vU-vec2(e,0.)))/(2.*e*${BW.toFixed(2)}),dz=(top(vU-vec2(0.,e))-top(vU+vec2(0.,e)))/(2.*e*${BD.toFixed(2)});
+  vec3 N=normalize(vec3(-dx,1.,-dz));
+  float b=bump(vU),k=(hN-b)/uT;
+  bool cut=hN>=uL-1e-4;
+  vec3 c;
+  if(uCoats<.02&&!cut)c=mix(uTop,uCore,smoothstep(.002,.012,b));
+  else if(hN<0.)c=uTop;
+  else{float kk=cut?k:uCoats-.01;int a=int(clamp(floor(kk),0.,uN-1.));c=kk<0.?uCore:uPal[a];
+   float w=fwidth(kk)*1.2,f=fract(kk);if(kk>=0.&&w>0.&&w<.6&&f<w){int a2=int(clamp(floor(kk)-1.,0.,uN-1.));c=mix(floor(kk)<1.?uCore:uPal[a2],c,.5+.5*f/w);}}
+  vec3 V=normalize(cameraPosition-vW),L1=normalize(vec3(.4,.9,.45)),L2=normalize(vec3(-.6,.5,.2));
+  float rough=cut?mix(.75,.05,uGloss):.14;
+  if(cut&&uGloss<.5){float sc=hs(floor(vU*vec2(1400.,40.)))*.5+.5;c*=mix(.86+.14*sc,1.,uGloss*2.);N=normalize(N+vec3(0.,0.,(sc-.75)*.06*(1.-uGloss*2.)));}
+  float diff=max(dot(N,L1),0.)*.95+max(dot(N,L2),0.)*.3+.22;
+  float ph=mix(14.,340.,1.-rough);
+  vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),ph)*(1.-rough)*1.3;
+  vec3 R=reflect(-V,N);float env=smoothstep(.25,.95,R.y)*(.55+.45*smoothstep(-.4,.4,R.x));
+  float fr=.04+.96*pow(1.-max(dot(N,V),0.),5.);
+  vec3 col=c*diff*(1.-rough*.08)+vec3(1.,.97,.9)*(sp+env*fr*mix(.25,1.5,1.-rough));
+  gl_FragColor=vec4(col,1.);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+ }`,extensions:{derivatives:true}});
+const board=new THREE.Mesh(topGeo,topMat);board.frustumCulled=false;scene.add(board);
+
+// 切り口（手前と右）
+function sideMat(axis){return new THREE.ShaderMaterial({uniforms:U,side:THREE.DoubleSide,
+ vertexShader:common+`varying float vY;varying vec2 vTU;
+ void main(){vTU=uv;vec3 p=position;float t=top(uv);p.y=mix(-.06,t,position.y);vY=p.y;vec4 w=modelMatrix*vec4(p,1.);gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:common+`varying float vY;varying vec2 vTU;
+ void main(){float b=bump(vTU),k=(vY-b)/uT;vec3 c;
+  if(vY<0.)c=uTop;else if(k<0.)c=uCore;else{int a=int(clamp(floor(k),0.,uN-1.));c=uPal[a];
+   float w=fwidth(k);if(fract(k)<w*1.2)c*=.55;}
+  c*=.95;gl_FragColor=vec4(c,1.);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+ }`,extensions:{derivatives:true}});}
+function side(uvA,uvB,pA,pB,mat){const n=G,pos=[],uv=[],idx=[];for(let i=0;i<=n;i++){const t=i/n,x=pA[0]+(pB[0]-pA[0])*t,z=pA[1]+(pB[1]-pA[1])*t,u=uvA[0]+(uvB[0]-uvA[0])*t,v=uvA[1]+(uvB[1]-uvA[1])*t;pos.push(x,0,z,x,1,z);uv.push(u,v,u,v);if(i<n){const a=i*2;idx.push(a,a+2,a+1,a+1,a+2,a+3);}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);const m=new THREE.Mesh(g,mat);m.frustumCulled=false;scene.add(m);return m;}
+const sm=sideMat();
+side([0,0],[1,0],[-BW/2,BD/2],[BW/2,BD/2],sm);
+side([1,0],[1,1],[BW/2,BD/2],[BW/2,-BD/2],sm);
+
+// 木地と台
+const woodTex=tex(1024,(g,s)=>{g.fillStyle='#b98d5c';g.fillRect(0,0,s,s);for(let k=0;k<420;k++){g.globalAlpha=rnd(.05,.18);g.fillStyle=k%2?'#8b633c':'#d3ab7c';g.fillRect(0,rnd(s),s,rnd(1,5));}g.globalAlpha=1;});
+const wood=new THREE.Mesh(new THREE.BoxGeometry(BW,.52,BD),new THREE.MeshStandardMaterial({map:woodTex,roughness:.72,envMapIntensity:.4}));wood.position.y=-.32;wood.castShadow=true;scene.add(wood);
+const tableTex=tex(1024,(g,s)=>{g.fillStyle='#231813';g.fillRect(0,0,s,s);for(let k=0;k<900;k++){g.globalAlpha=rnd(.02,.09);g.fillStyle=k%2?'#000':'#4b3429';g.fillRect(0,rnd(s),s,rnd(1,4));}g.globalAlpha=1;},2,2);
+const table=new THREE.Mesh(new THREE.PlaneGeometry(40,30),new THREE.MeshStandardMaterial({map:tableTex,roughness:.65,envMapIntensity:.4}));table.rotation.x=-Math.PI/2;table.position.y=-.58;table.receiveShadow=true;scene.add(table);
+
+// ヘラと砥石
+const metal=new THREE.MeshStandardMaterial({color:0xd6c8a6,roughness:.55,envMapIntensity:.8});
+const hera=new THREE.Group();const hb=new THREE.Mesh(new RoundedBoxGeometry(.75,.03,.42,3,.012),metal);hb.castShadow=true;hera.add(hb);const hh=new THREE.Mesh(new RoundedBoxGeometry(.7,.05,.14,3,.02),metal);hh.position.set(.62,.17,0);hh.rotation.z=.46;hh.castShadow=true;hera.add(hh);hera.visible=false;scene.add(hera);
+const stone=new THREE.Mesh(new RoundedBoxGeometry(1.1,.3,.62,4,.05),new THREE.MeshStandardMaterial({color:0x7c7a71,roughness:.96}));stone.castShadow=true;stone.visible=false;scene.add(stone);
+const shadowCatcher=new THREE.Mesh(new THREE.PlaneGeometry(BW,BD),new THREE.ShadowMaterial({opacity:.3}));shadowCatcher.rotation.x=-Math.PI/2;shadowCatcher.visible=false;scene.add(shadowCatcher);
+
+// 光
+scene.add(new THREE.HemisphereLight(0xfff0dd,0x2a1c14,.9));
+const key=new THREE.DirectionalLight(0xfff0dd,2.4);key.position.set(4,8,5);key.castShadow=true;key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:1,far:24});key.shadow.bias=-.0005;key.shadow.normalBias=.02;scene.add(key);
+
+// カメラ
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const keys=[
+ {p:0,c:V(2.6,4.6,5.2),l:V(.5,0,0)},{p:.11,c:V(2.1,3.6,4.2),l:V(.7,.05,.3)},
+ {p:.17,c:V(1.6,.42,3.9),l:V(.9,-.08,2.1)},{p:.26,c:V(1.5,.42,3.7),l:V(.9,-.04,2.1)},
+ {p:.31,c:V(1.9,2.4,4.2),l:V(.6,.05,1)},{p:.41,c:V(1.4,2,3.6),l:V(.5,.1,1)},
+ {p:.46,c:V(1.2,.62,3.45),l:V(.75,.14,2.1)},{p:.59,c:V(1,.72,3.3),l:V(.7,.18,2.1)},
+ {p:.635,c:V(2.8,3.8,4.8),l:V(.6,.05,.1)},{p:.68,c:V(2.6,3.5,4.6),l:V(.6,.05,.1)},
+ {p:.74,c:V(1.5,2.5,3),l:V(.5,.2,.5)},{p:.85,c:V(1.25,2.1,2.5),l:V(.5,.2,.5)},
+ {p:.91,c:V(.9,3.8,3),l:V(.45,0,.1)},{p:1,c:V(.8,4,2.8),l:V(.45,0,.1)}];
+const cp=new THREE.Vector3(),cl=new THREE.Vector3();
+function camAt(p){let i=0;while(i<keys.length-2&&p>keys[i+1].p)i++;const a=keys[i],b=keys[i+1],t=ss(a.p,b.p,p);cp.copy(a.c).lerp(b.c,t);cl.copy(a.l).lerp(b.l,t);}
+
+const caps=[...document.querySelectorAll('.cap')].map(el=>({el,a:+el.dataset.a,b:+el.dataset.b}));
+const hint=document.getElementById('hint'),barI=document.querySelector('#bar i');
+let W=0,H=0,portrait=false;
+function resize(){W=innerWidth;H=innerHeight;portrait=W<=760||W/H<=1;renderer.setSize(W,H,false);camera.aspect=W/H;camera.fov=portrait?52:36;
+ if(portrait)camera.setViewOffset(W,H,0,H*.2,W,H);else camera.setViewOffset(W,H,-W*.17,0,W,H);camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+
+const Ltop=A+TH*N+.02,Lgood=TH*(N-.35),Lmin=-.03;
+function apply(p,t){
+ // 冒頭：完成品／下地へ巻き戻す
+ const toStart=ss(.11,.15,p);
+ const sweep=ss(.31,.42,p);
+ const coat=ss(.46,.6,p);
+ const grind=ss(.72,.86,p);
+ const finish=1-toStart;
+ const bumps=Math.max(sweep,finish);
+ U.uA.value=A*bumps;U.uSweep.value=finish>.5?1.1:sweep*1.15;
+ U.uCoats.value=Math.max(N*finish,N*coat);
+ let L=Ltop;
+ if(finish>.001)L=Lgood;
+ if(p>.135&&p<.72)L=Ltop;
+ if(p>=.72)L=Ltop+(Lgood-Ltop)*grind;
+ let gloss=finish;
+ if(p>=.885){const on=ss(.885,.905,p);
+  const v=sliderEl?+sliderEl.value:.5;
+  const base=v<=.5?Ltop*.42+(Lgood-Ltop*.42)*(v/.5):Lgood+(Lmin-Lgood)*((v-.5)/.5);
+  L=Lgood+(base-Lgood)*on;gloss=.95*ss(.885,.93,p);}
+ U.uL.value=L;U.uGloss.value=gloss;
+ hera.visible=p>.3&&p<.425&&sweep<.999;
+ if(hera.visible){const f=Math.abs(Math.sin(t*9)),x=-BW/2+sweep*BW*1.03;hera.position.set(x,.09+f*.34,Math.sin(t*3.1)*1.5);hera.rotation.z=-.2+f*.1;}
+ stone.visible=p>.715&&p<.87&&grind<.999;
+ if(stone.visible){stone.position.set(Math.sin(p*230)*2.2,L+.18,Math.sin(p*71)*1.4);}
+ camAt(p);
+ if(portrait){const d=cp.clone().sub(cl);camera.position.copy(cl).add(d.multiplyScalar(1.34));}else camera.position.copy(cp);
+ camera.lookAt(cl);
+ for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
+}
+const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prog=()=>{const m=document.documentElement.scrollHeight-innerHeight;return m>0?Math.min(1,Math.max(0,scrollY/m)):0;};
+let cur=prog(),last=performance.now(),tt=0,frozen=null;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;tt+=dt;
+ const target=frozen??prog();cur+=(target-cur)*(frozen!==null||prm?1:Math.min(1,dt*5));
+ apply(cur,prm?0:tt);renderer.render(scene,camera);requestAnimationFrame(frame);}
+window.__seek=p=>{frozen=p;cur=p;tt+=.016;apply(p,tt);renderer.render(scene,camera);return renderer.info.render.triangles;};
+window.__release=()=>{frozen=null;};
+const q=new URLSearchParams(location.search);
+if(q.has('p'))frozen=+q.get('p');
+if(q.has('auto')){const s=+q.get('auto')||70,st=performance.now();(function a(n){const m=document.documentElement.scrollHeight-innerHeight,k=(n-st)/(s*1000);scrollTo(0,m*Math.min(1,k));if(k<1)requestAnimationFrame(a);})(st);}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

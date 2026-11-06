@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>道の下の水もれ｜見えない仕事サンプル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#f1f4f7;--mute:#bfc8d2;--lamp:#ffc466;--water:#7fd4ff;--night:#070b13}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Noto Sans JP",system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+#scroll{height:1200vh}
+#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(6,9,15,.93) 0,rgba(6,9,15,.76) 34%,rgba(6,9,15,0) 60%)}
+.cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none}
+.cap h2{margin:0 0 .55em;font-weight:900;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
+.cap p{margin:0 0 .9em;font-size:clamp(15px,1.25vw,18px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
+.cap em{font-style:normal;color:var(--lamp)}
+.vo{display:inline-flex;padding:10px 16px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(0,0,0,.25);color:var(--ink);font:500 14px "Noto Sans JP",sans-serif;cursor:pointer;margin:0 8px 10px 0}
+.vo.go{background:var(--lamp);border-color:var(--lamp);color:#1a1206;font-weight:900}
+.sl{display:block;font-size:14px;font-weight:500}
+.sl input{display:block;width:100%;margin:6px 0 10px;accent-color:var(--lamp);height:32px}
+.scope{display:block;margin-bottom:10px}
+.scope span{display:block;font-size:12px;color:var(--mute);margin-bottom:4px}
+.scope canvas{display:block;width:100%;height:64px;border-radius:6px;background:rgba(3,8,16,.85);border:1px solid rgba(127,212,255,.25)}
+.res{min-height:1.6em;margin:0;font-weight:500;font-size:15px;color:var(--lamp)}
+#tag{position:fixed;left:clamp(20px,5vw,72px);top:18px;font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#note{position:fixed;right:18px;top:18px;font-size:12px;color:var(--mute);background:rgba(6,9,15,.6);padding:5px 10px;border-radius:5px}
+#bar{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:3px;height:30vh;background:rgba(255,255,255,.16);border-radius:2px}
+#bar i{display:block;width:100%;height:0;background:var(--ink);border-radius:2px}
+#hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);font-size:13px;color:var(--mute);transition:opacity .3s}
+#err{display:none;position:fixed;inset:0;padding:30px;background:var(--night);line-height:1.8}
+@media (max-width:760px),(max-aspect-ratio:1/1){
+ #scrim{background:linear-gradient(0deg,rgba(6,9,15,.95) 0,rgba(6,9,15,.84) 36%,rgba(6,9,15,0) 58%)}
+ .cap{left:20px;right:20px;top:auto;bottom:24px;transform:none;width:auto}
+ .cap h2{font-size:clamp(24px,7vw,34px)}
+ .cap p{font-size:14.5px;line-height:1.75}
+ .cap.play h2{font-size:22px;margin-bottom:.3em}
+ .cap.play p{font-size:13px;line-height:1.6;margin-bottom:.5em}
+ .scope canvas{height:44px}
+ .sl input{margin:2px 0 6px}
+ .vo{padding:8px 12px;font-size:13px}
+ #bar{display:none}
+ #tag{top:12px;left:14px;font-size:11px}
+ #note{top:32px;left:14px;right:14px;font-size:10.5px;padding:3px 8px}
+ #hint{bottom:6px}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div id="scrim"></div>
+<div id="tag"></div>
+<div id="note"></div>
+<div id="bar"><i></i></div>
+<div id="caps"></div>
+<div id="hint">下へスクロール</div>
+<div id="scroll"></div>
+<div id="err">この図を表示できませんでした（お使いの端末で3D表示が使えないようです）。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const S=await fetch('scene.json',{cache:'no-store'}).then(r=>r.json());
+document.getElementById('tag').textContent=S.tag;
+document.getElementById('note').textContent=S.note;
+const capsEl=document.getElementById('caps');
+const UI={};
+S.chapters.forEach(ch=>{const s=document.createElement('section');s.className='cap'+(ch.play?' play':'');s.dataset.a=ch.a;s.dataset.b=ch.b;
+ s.innerHTML=`<h2>${ch.title}</h2><p>${ch.body}</p>`;
+ if(ch.voice){const b=document.createElement('button');b.className='vo';b.textContent='▶ 職人の声を聞く';const au=new Audio(ch.voice);b.onclick=()=>{au.paused?au.play():au.pause();};s.append(b);}
+ if(ch.play){const P=S.play;
+  const sc=document.createElement('div');sc.className='scope';sc.innerHTML=`<span>${P.scopeLabel}</span><canvas width="560" height="128"></canvas>`;UI.scope=sc.querySelector('canvas');s.append(sc);
+  const l=document.createElement('label');l.className='sl';l.textContent=P.slider;UI.slider=document.createElement('input');UI.slider.type='range';UI.slider.min=P.xMin;UI.slider.max=P.xMax;UI.slider.step=.01;UI.slider.value=P.xMin;UI.slider.setAttribute('aria-label',P.slider);l.append(UI.slider);s.append(l);
+  UI.snd=document.createElement('button');UI.snd.className='vo';UI.snd.textContent=P.soundOn;s.append(UI.snd);
+  UI.dig=document.createElement('button');UI.dig.className='vo go';UI.dig.textContent=P.dig;s.append(UI.dig);
+  UI.res=document.createElement('p');UI.res.className='res';UI.res.setAttribute('aria-live','polite');s.append(UI.res);}
+ capsEl.append(s);});
+
+const canvas=document.getElementById('c');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});}
+catch(e){document.getElementById('err').style.display='block';throw e;}
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+const DAYC=new THREE.Color(0x33404f),NIGHTC=new THREE.Color(0x070b13);
+scene.background=DAYC.clone();
+const camera=new THREE.PerspectiveCamera(36,1,.05,120);
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+
+const phone=innerWidth<760;
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
+function tex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
+
+// 道の寸法（断面は z=0＝管の中心で切っている）
+const LX=8.5,D=3.6,ZB=-2.6,ZF=2.2,PY=S.pipeY,PR=S.pipeR;
+const SND=S.sound;
+const LEAK=new THREE.Vector3(S.leakX,PY+PR,0);
+
+// ── 音の計算（画面の波・探知器の値・合成音はすべてこの式から）──
+// 土を直接伝わる道と、管を伝わってから土へ抜ける道の2本。距離が伸びるほど弱まり、高い音ほど早く弱まる。
+const geo=r=>1/(1+.35*r*r);
+function bandAt(x,z,lx,aS,aP){const dx=x-lx,dy=-PY-PR,r=Math.sqrt(dx*dx+dy*dy+z*z),dp=Math.sqrt(PY*PY+z*z);
+ return Math.max(Math.exp(-aS*r)*geo(r),SND.pipeShare*Math.exp(-aP*Math.abs(dx)-aS*dp)*geo(dp));}
+const REF={};for(const b of['low','mid','high'])REF[b]=bandAt(0,0,0,SND.soil[b],SND.pipe[b]);
+function sense(x,z,lx){const o={};for(const b of['low','mid','high'])o[b]=bandAt(x,z,lx,SND.soil[b],SND.pipe[b])/REF[b];
+ o.total=SND.mix.low*o.low+SND.mix.mid*o.mid+SND.mix.high*o.high;return o;}
+
+const f=v=>v.toFixed(4);
+const U={uLeak:{value:LEAK},uT:{value:0},uWave:{value:0},uDay:{value:0},uCars:{value:[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]},
+ uProbe:{value:new THREE.Vector3(0,0,0)},uPA:{value:new THREE.Vector3(0,0,0)},uWet:{value:0},uGlow:{value:0},uBore:{value:0}};
+const waveGL=`uniform vec3 uLeak,uProbe,uPA;uniform vec3 uCars[3];uniform float uT,uWave,uDay,uWet,uGlow,uBore;varying vec3 vW;
+float geo(float r){return 1./(1.+.35*r*r);}
+float ln(float s,float sp,float w,float th){float d=abs(fract(s/sp-uT*w)-.5)*sp,fw=fwidth(s);return (1.-smoothstep(th,th+max(fw,.002),d))*smoothstep(.55,.18,fw/sp);}
+vec3 leakW(vec3 P,float vis){float r=distance(P,uLeak),dx=abs(P.x-uLeak.x),dp=length(P.yz-vec2(${f(PY)},0.)),sp=dx*.55+dp;
+ float gr=geo(r),gp=geo(dp),sh=${f(SND.pipeShare)},near=exp(-dp*2.4);
+ float lo=min(1.,exp(-${f(SND.soil.low)}*r)*gr*1.25), loP=sh*exp(-${f(SND.pipe.low)}*dx-${f(SND.soil.low)}*dp)*gp*near*1.5;
+ float mi=min(1.,exp(-${f(SND.soil.mid)}*r)*gr*1.7), miP=sh*exp(-${f(SND.pipe.mid)}*dx-${f(SND.soil.mid)}*dp)*gp*near*1.5;
+ float hi=min(1.,exp(-${f(SND.soil.high)}*r)*gr*2.4);
+ vec3 c=vec3(.06,.26,1.)*(lo*ln(r,1.25,.55,.032)+loP*ln(sp,1.25,.55,.03))*1.1;
+ c+=vec3(.05,.62,.95)*(mi*ln(r,.56,.85,.016)+miP*ln(sp,.56,.85,.014))*1.05;
+ c+=vec3(.9,.98,1.)*hi*ln(r,.21,1.25,.008)*1.15;
+ return c*vis;}
+vec3 carN(vec3 P){vec3 c=vec3(0.);for(int i=0;i<3;i++){float r=distance(P,uCars[i]),q=float(i);
+ c+=vec3(.95,.5,.16)*(ln(r+q*.3,.9,.9+q*.2,.03)*exp(-.17*r)*.75+ln(r+P.x*.2,.27,1.5+q*.3,.01)*exp(-.26*r)*.85);}
+ return c*uDay;}
+vec3 probeW(vec3 P){float r=distance(P,uProbe);
+ vec3 c=vec3(.06,.26,1.)*uPA.x*ln(r,1.05,.6,.03)*exp(-.5*r)*1.1;
+ c+=vec3(.05,.62,.95)*pow(uPA.y,1.5)*ln(r,.46,.9,.018)*exp(-.6*r)*1.7;
+ c+=vec3(.9,.98,1.)*pow(uPA.z,1.3)*ln(r,.17,1.3,.009)*exp(-.75*r)*2.;
+ return c;}`;
+
+function quad(a,b,c,d,uvf){const g=new THREE.BufferGeometry();const P=[a,b,c,d];g.setAttribute('position',new THREE.Float32BufferAttribute(P.flat(),3));g.setAttribute('uv',new THREE.Float32BufferAttribute(P.flatMap(uvf),2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();return g;}
+
+// 地面の層（アスファルト／砕石／土）
+const soilTex=tex(2048,512,(g,w,h)=>{const yo=y=>y/D*h;
+ const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#5c4432');gr.addColorStop(.45,'#4a3527');gr.addColorStop(1,'#2d2019');g.fillStyle=gr;g.fillRect(0,0,w,h);
+ for(let i=0;i<9000;i++){g.globalAlpha=rnd(.05,.28);g.fillStyle=['#2a1d15','#6f543f','#7d6650','#1f1610'][i%4];g.beginPath();g.ellipse(rnd(w),rnd(yo(.6),h),rnd(.5,3.2),rnd(.4,2.4),rnd(3),0,7);g.fill();}
+ for(let i=0;i<170;i++){const x=rnd(w),y=rnd(yo(.7),h),r=rnd(3,9);g.globalAlpha=rnd(.5,.9);g.fillStyle=['#6c655c','#57524b','#7f776b'][i%3];g.beginPath();g.ellipse(x,y,r,r*rnd(.55,.85),rnd(3),0,7);g.fill();g.globalAlpha=.35;g.fillStyle='#fff';g.beginPath();g.ellipse(x-r*.25,y-r*.3,r*.35,r*.2,0,0,7);g.fill();}
+ g.globalAlpha=1;g.fillStyle='#6b6862';g.fillRect(0,yo(.2),w,yo(.42));
+ for(let i=0;i<3800;i++){g.globalAlpha=rnd(.4,1);g.fillStyle=['#8f8c85','#4c4a46','#a8a49b','#3a3936'][i%4];const r=rnd(1.2,4.4);g.beginPath();g.ellipse(rnd(w),rnd(yo(.2),yo(.62)),r,r*.7,rnd(3),0,7);g.fill();}
+ g.globalAlpha=1;g.fillStyle='#17181b';g.fillRect(0,0,w,yo(.2));
+ for(let i=0;i<2600;i++){g.globalAlpha=rnd(.1,.5);g.fillStyle=i%2?'#34363a':'#08090a';g.fillRect(rnd(w),rnd(yo(.2)),rnd(1,3),rnd(1,2));}
+ g.globalAlpha=1;});
+const soilM=new THREE.MeshStandardMaterial({map:soilTex,roughness:.97,envMapIntensity:.5});
+const soilUV=([x,y,z])=>[x/9,(y+D)/D],soilUVs=([x,y,z])=>[z/9,(y+D)/D];
+
+// 道路の表面
+const roadTex=tex(1024,1024,(g,w,h)=>{g.fillStyle='#2b2d31';g.fillRect(0,0,w,h);
+ for(let i=0;i<60000;i++){g.globalAlpha=rnd(.08,.42);g.fillStyle=['#44474c','#17181a','#5a5d62','#222427'][i%4];g.fillRect(rnd(w),rnd(h),rnd(.8,2.4),rnd(.8,2.4));}
+ g.globalAlpha=.15;g.fillStyle='#000';for(let i=0;i<7;i++){g.beginPath();g.ellipse(rnd(w),rnd(h),rnd(40,190),rnd(14,70),rnd(3),0,7);g.fill();}
+ g.globalAlpha=.92;g.fillStyle='#e8e4d6';g.fillRect(0,h*.035,w,h*.012);g.fillRect(0,h*.953,w,h*.012);
+ for(let x=0;x<w;x+=w/3)g.fillRect(x+w*.03,h*.492,w*.18,h*.016);g.globalAlpha=1;});
+const roadM=new THREE.MeshStandardMaterial({map:roadTex,roughness:.82,envMapIntensity:.55});
+const roadUV=([x,y,z])=>[x/6,(z-ZB)/(ZF-ZB)];
+
+const addMesh=(g,m,cast=false,recv=true)=>{const me=new THREE.Mesh(g,m);me.castShadow=cast;me.receiveShadow=recv;scene.add(me);return me;};
+// 奥側の地面（切り口は管の帯を抜いて2枚）
+addMesh(quad([-LX,PY+PR,0],[LX,PY+PR,0],[LX,0,0],[-LX,0,0],soilUV),soilM);
+addMesh(quad([-LX,-D,0],[LX,-D,0],[LX,PY-PR,0],[-LX,PY-PR,0],soilUV),soilM);
+addMesh(quad([-LX,0,0],[LX,0,0],[LX,0,ZB],[-LX,0,ZB],roadUV),roadM);
+addMesh(quad([LX,-D,0],[LX,-D,-5],[LX,0,-5],[LX,0,0],soilUVs),soilM);
+addMesh(quad([-LX,-D,-5],[-LX,-D,0],[-LX,0,0],[-LX,0,-5],soilUVs),soilM);
+
+// 手前のふた（閉じると、ただの道。開くと断面）
+const lidSoil=soilM.clone();lidSoil.transparent=true;const lidRoad=roadM.clone();lidRoad.transparent=true;
+const lid=new THREE.Group();scene.add(lid);
+const mk=(g,m)=>{const me=new THREE.Mesh(g,m);me.receiveShadow=true;lid.add(me);return me;};
+mk(quad([-LX,-D,ZF],[LX,-D,ZF],[LX,0,ZF],[-LX,0,ZF],soilUV),lidSoil);
+mk(quad([-LX,0,ZF],[LX,0,ZF],[LX,0,0],[-LX,0,0],roadUV),lidRoad);
+mk(quad([LX,-D,ZF],[LX,-D,0],[LX,0,0],[LX,0,ZF],soilUVs),lidSoil);
+mk(quad([-LX,-D,0],[-LX,-D,ZF],[-LX,0,ZF],[-LX,0,0],soilUVs),lidSoil);
+
+// 水道管（断面）：中の水＋管の縁
+const waterM=new THREE.ShaderMaterial({uniforms:U,vertexShader:`varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:waveGL+`void main(){float v=(vW.y-(${f(PY)}))/${f(PR)};
+  float shade=sqrt(max(0.,1.-v*v));
+  float st=pow(.5+.5*sin(vW.x*1.3+sin(v*11.)*1.6-uT*2.4),10.),st2=pow(.5+.5*sin(vW.x*2.9+sin(v*23.+1.)*1.9-uT*3.4),14.);
+  vec3 c=mix(vec3(.006,.03,.075),vec3(.018,.1,.23),shade)+vec3(.3,.6,.9)*(st*.09+st2*.1)*shade;
+  float dx=abs(vW.x-uLeak.x);c+=vec3(.25,.75,1.)*uGlow*pow(.5+.5*sin(dx*3.4-uT*5.),9.)*exp(-.07*dx)*.8;
+  gl_FragColor=vec4(c,1.);
+  #include <colorspace_fragment>
+ }`});
+const water=addMesh(quad([-LX,PY-PR,-.03],[LX,PY-PR,-.03],[LX,PY+PR,-.03],[-LX,PY+PR,-.03],soilUV),waterM,false,false);
+const pipeM=new THREE.MeshStandardMaterial({color:0x4d6272,metalness:.7,roughness:.38});
+for(const yy of[PY+PR+.035,PY-PR-.035]){const m=new THREE.Mesh(new THREE.BoxGeometry(2*LX,.075,.1),pipeM);m.position.set(0,yy,.0);m.castShadow=false;scene.add(m);}
+// 穴の口
+const holeMark=new THREE.Mesh(new THREE.BoxGeometry(.13,.09,.12),new THREE.MeshBasicMaterial({color:0x061018}));holeMark.position.set(LEAK.x,PY+PR+.035,.0);scene.add(holeMark);
+// バルブと、路面の鉄ぶた
+const VX=-5.4;
+const ironM=new THREE.MeshStandardMaterial({color:0x3b3f44,metalness:.8,roughness:.42});
+const stem=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,-PY-PR,18),pipeM);stem.position.set(VX,(PY+PR)/2,.02);scene.add(stem);
+const vbody=new THREE.Mesh(new RoundedBoxGeometry(.7,.34,.22,3,.04),pipeM);vbody.position.set(VX,PY+PR+.14,.03);scene.add(vbody);
+const lidTex=tex(256,256,(g,w)=>{g.fillStyle='#2f3236';g.fillRect(0,0,w,w);g.strokeStyle='#54585e';g.lineWidth=4;for(let i=-w;i<w*2;i+=22){g.beginPath();g.moveTo(i,0);g.lineTo(i+w,w);g.stroke();g.beginPath();g.moveTo(i+w,0);g.lineTo(i,w);g.stroke();}});
+const coverM=new THREE.MeshStandardMaterial({map:lidTex,metalness:.7,roughness:.5});
+const cover=new THREE.Mesh(new THREE.CylinderGeometry(.34,.36,.03,40),coverM);cover.position.set(VX,.018,0);cover.receiveShadow=true;scene.add(cover);
+
+// 波のかぶせ（切り口／路面）
+const overVS=`varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`;
+const cutFS=waveGL+`void main(){vec3 c=leakW(vW,uWave)+carN(vW);
+  float pipe=smoothstep(${f(PR)},${f(PR+.06)},abs(vW.y-(${f(PY)})));c*=.25+.75*pipe;
+  c*=smoothstep(${f(LX)},${f(LX-.6)},abs(vW.x));
+  gl_FragColor=vec4(c,1.);
+  #include <colorspace_fragment>
+ }`;
+const overM=fs=>new THREE.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,polygonOffset:true,polygonOffsetFactor:-2,vertexShader:overVS,fragmentShader:fs});
+const cutOver=addMesh(quad([-LX,-D,.006],[LX,-D,.006],[LX,0,.006],[-LX,0,.006],soilUV),overM(cutFS),false,false);cutOver.renderOrder=3;
+const roadFS=waveGL+`void main(){vec3 c=leakW(vW,uWave)*.72+carN(vW)*.55+probeW(vW);
+  c*=smoothstep(${f(LX)},${f(LX-.6)},abs(vW.x));
+  gl_FragColor=vec4(c,1.);
+  #include <colorspace_fragment>
+ }`;
+const roadOverA=addMesh(quad([-LX,.008,0],[LX,.008,0],[LX,.008,ZB],[-LX,.008,ZB],roadUV),overM(roadFS),false,false);roadOverA.renderOrder=3;
+const roadOverB=addMesh(quad([-LX,.008,ZF],[LX,.008,ZF],[LX,.008,0],[-LX,.008,0],roadUV),overM(roadFS),false,false);roadOverB.renderOrder=3;
+
+// ぬれて削られた土
+const wetM=new THREE.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,vertexShader:overVS,
+ fragmentShader:waveGL+`float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float n(vec2 p){vec2 i=floor(p),q=fract(p),u=q*q*(3.-2.*q);return mix(mix(h(i),h(i+vec2(1,0)),u.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),u.x),u.y);}
+ void main(){vec2 d=(vW.xy-uLeak.xy)*vec2(.75,1.05);d.y+=.02;float r=length(d)+(n(vW.xy*5.)-.5)*.2+(n(vW.xy*17.)-.5)*.06;
+  float wet=smoothstep(1.32,.72,r),cav=smoothstep(.46,.36,r)*step(0.,vW.y-uLeak.y+.02);
+  float a=(wet*.72+cav*.28)*uWet;a*=smoothstep(0.,.05,abs(vW.y-(${f(PY)}))-${f(PR)});
+  vec3 c=mix(vec3(.05,.04,.045),vec3(.006,.012,.022),cav);
+  gl_FragColor=vec4(c,a);
+  #include <colorspace_fragment>
+ }`});
+const wetO=addMesh(quad([-LX,-D,.004],[LX,-D,.004],[LX,0,.004],[-LX,0,.004],soilUV),wetM,false,false);wetO.renderOrder=2;
+
+// 吹き出す水（ひと粒ごとに放物線を計算）
+const dotTex=tex(64,64,(g,s)=>{const r=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.3,'rgba(255,255,255,.7)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,s,s);});
+const JN=phone?S.particlesPhone:S.particles,jp=new Float32Array(JN*3),ja=new Float32Array(JN*3);
+for(let i=0;i<JN;i++){const a=rnd(-.62,.62);jp[i*3]=Math.sin(a)*rnd(.9,1.35);jp[i*3+1]=Math.cos(a)*rnd(1.5,2.2);jp[i*3+2]=rnd(.02,.14);ja[i*3]=rnd();ja[i*3+1]=rnd(.85,1.5);ja[i*3+2]=rnd(.6,1.3);}
+const jg=new THREE.BufferGeometry();jg.setAttribute('position',new THREE.BufferAttribute(jp,3));jg.setAttribute('aJ',new THREE.BufferAttribute(ja,3));
+const jU={uT:U.uT,uLeak:U.uLeak,uOn:{value:0},uPx:{value:1},uTex:{value:dotTex}};
+const jets=new THREE.Points(jg,new THREE.ShaderMaterial({uniforms:jU,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+ vertexShader:`attribute vec3 aJ;uniform float uT,uOn,uPx;uniform vec3 uLeak;varying float vA;
+ void main(){float T=fract(uT*aJ.y*.9+aJ.x)*.62;vec3 p=uLeak+vec3(position.x*T,position.y*T-1.9*T*T,position.z);
+  vA=uOn*(1.-T/.62);vec4 mv=viewMatrix*vec4(p,1.);gl_PointSize=uPx*aJ.z*(.075+T*.035)*600./max(.3,-mv.z);gl_Position=projectionMatrix*mv;}`,
+ fragmentShader:`uniform sampler2D uTex;varying float vA;void main(){float a=texture2D(uTex,gl_PointCoord).a*vA;if(a<.004)discard;gl_FragColor=vec4(vec3(.6,.88,1.)*a*1.3,a);}`}));
+jets.frustumCulled=false;jets.renderOrder=4;scene.add(jets);
+
+// 歩道・家・街灯
+const walkM=new THREE.MeshStandardMaterial({color:0x6b6b68,roughness:.95,envMapIntensity:.5});
+const addB=(w,h,d,x,y,z,m,c=true)=>{const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);me.position.set(x,y,z);me.castShadow=c;me.receiveShadow=true;scene.add(me);return me;};
+addB(2*LX,.14,1.2,0,.07,ZB-.6,walkM,false);
+addB(2*LX,.3,2.6,0,-.15,-5.1,new THREE.MeshStandardMaterial({color:0x2c2f2c,roughness:1}),false);
+const winTex=tex(256,256,(g,w)=>{g.fillStyle='#000';g.fillRect(0,0,w,w);g.fillStyle='#ffcf85';for(const[x,y]of[[40,50],[150,50],[40,160],[150,160]]){if(Math.random()<.55)g.fillRect(x,y,62,56);}});
+const WALLC=[0x8a8378,0x6f7c80,0x7f7262,0x75706b,0x8b7d6e];
+const winMats=[];
+for(let i=0;i<7;i++){const w=rnd(1.9,2.5),h=rnd(1.7,2.5),x=-LX+1.2+i*2.45;
+ const wm=new THREE.MeshStandardMaterial({color:WALLC[i%5],roughness:.9,emissive:0xffb563,emissiveMap:winTex.clone(),emissiveIntensity:0,envMapIntensity:.5});
+ wm.emissiveMap.needsUpdate=true;winMats.push(wm);addB(w,h,1.8,x,h/2,-5.2,wm);
+ const roof=new THREE.Mesh(new THREE.CylinderGeometry(.01,1,1,4),new THREE.MeshStandardMaterial({color:0x34363a,roughness:.8}));roof.rotation.y=Math.PI/4;roof.scale.set(w*.78,.72,1.42);roof.position.set(x,h+.36,-5.2);roof.castShadow=true;scene.add(roof);}
+const poleM=new THREE.MeshStandardMaterial({color:0x3e4349,metalness:.5,roughness:.5});
+const bulbM=new THREE.MeshStandardMaterial({color:0x8a8a80,emissive:0xffbc66,emissiveIntensity:0});
+const lamps=[];
+for(const lx of[-3.8,1.2,6.2]){const p=new THREE.Mesh(new THREE.CylinderGeometry(.045,.06,3.1,12),poleM);p.position.set(lx,1.55,ZB-.5);p.castShadow=true;scene.add(p);
+ const arm=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.9,8),poleM);arm.rotation.x=Math.PI/2;arm.position.set(lx,3.08,ZB-.1);scene.add(arm);
+ const b=new THREE.Mesh(new RoundedBoxGeometry(.34,.08,.18,2,.03),bulbM);b.position.set(lx,3.04,ZB+.3);scene.add(b);
+ const L=new THREE.PointLight(0xffb45e,0,11,1.5);L.position.set(lx,2.9,ZB+.5);scene.add(L);lamps.push(L);}
+// 星
+const stN=260,stp=new Float32Array(stN*3);for(let i=0;i<stN;i++){stp[i*3]=rnd(-34,34);stp[i*3+1]=rnd(2,18);stp[i*3+2]=rnd(-24,-14);}
+const stG=new THREE.BufferGeometry();stG.setAttribute('position',new THREE.BufferAttribute(stp,3));
+const starM=new THREE.PointsMaterial({color:0xdfe8ff,size:.055,transparent:true,opacity:0,depthWrite:false});scene.add(new THREE.Points(stG,starM));
+
+// 車
+const cars=[];
+const carC=[0x9fb4c6,0xa8493d,0xd9d7d0];
+for(let i=0;i<3;i++){const g=new THREE.Group();const paint=new THREE.MeshStandardMaterial({color:carC[i],metalness:.55,roughness:.32});
+ const b=new THREE.Mesh(new RoundedBoxGeometry(1.5,.3,.7,3,.08),paint);b.position.y=.27;b.castShadow=true;g.add(b);
+ const ca=new THREE.Mesh(new RoundedBoxGeometry(.8,.26,.62,3,.08),new THREE.MeshStandardMaterial({color:0x10161c,metalness:.6,roughness:.15}));ca.position.set(-.08,.5,0);ca.castShadow=true;g.add(ca);
+ for(const[x,z]of[[-.48,.36],[.48,.36],[-.48,-.36],[.48,-.36]]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.08,16),new THREE.MeshStandardMaterial({color:0x0c0c0d,roughness:.8}));w.rotation.x=Math.PI/2;w.position.set(x,.13,z);g.add(w);}
+ for(const z of[-.24,.24]){const h=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),new THREE.MeshBasicMaterial({color:0xfff2c9}));h.position.set(.75,.28,z);g.add(h);}
+ scene.add(g);cars.push({g,z:i==2?1.05:-1.35,dir:i==2?-1:1,off:[0,7.2,3.4][i],sp:[2.4,2.1,2.8][i]});}
+
+// 音聴棒（棒の先の丸板に耳を当てる）
+const rodM=new THREE.MeshStandardMaterial({color:0xb9bdc1,metalness:.85,roughness:.28});
+const rod=new THREE.Group();
+{const r=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,1,12),rodM);r.position.y=.5;rod.add(r);
+ const d=new THREE.Mesh(new THREE.CylinderGeometry(.13,.1,.05,28),new THREE.MeshStandardMaterial({color:0x32281f,roughness:.5}));d.position.y=1;rod.add(d);rod.userData.r=r;rod.userData.d=d;}
+rod.visible=false;scene.add(rod);
+function setRod(x,yb,yt,z=.03){rod.visible=true;rod.position.set(x,yb,z);const len=yt-yb;rod.userData.r.scale.y=len;rod.userData.r.position.y=len/2;rod.userData.d.position.y=len;}
+// ボーリングの穴
+const boreM=new THREE.MeshBasicMaterial({color:0x050507,transparent:true});
+const bore=new THREE.Mesh(new THREE.PlaneGeometry(.1,1),boreM);bore.renderOrder=2.5;bore.visible=false;scene.add(bore);
+const boreTop=new THREE.Mesh(new THREE.CircleGeometry(.05,20),new THREE.MeshBasicMaterial({color:0x050507}));boreTop.rotation.x=-Math.PI/2;boreTop.visible=false;scene.add(boreTop);
+
+// 探知器（路面に置く）
+const det=new THREE.Group();
+{const body=new THREE.MeshStandardMaterial({color:0x1d2329,metalness:.4,roughness:.45});
+ const b=new THREE.Mesh(new THREE.CylinderGeometry(.27,.34,.2,36),body);b.position.y=.1;b.castShadow=true;det.add(b);
+ const top=new THREE.Mesh(new THREE.CylinderGeometry(.2,.27,.04,36),new THREE.MeshStandardMaterial({color:0xffb54d,metalness:.2,roughness:.4,emissive:0xff9a2e,emissiveIntensity:.28}));top.position.y=.22;det.add(top);
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.75,10),rodM);post.position.y=.6;det.add(post);
+ const hd=new THREE.Mesh(new RoundedBoxGeometry(.3,.06,.08,2,.025),body);hd.position.y=.98;det.add(hd);}
+det.visible=false;scene.add(det);
+
+// 聞いた記録の棒（真上で最も高くなる山を、聞きながら描いていく）
+const BN=31,BX=i=>-7.5+i*.5,BH=2.3;
+const bars=new THREE.InstancedMesh(new RoundedBoxGeometry(.2,1,.2,2,.04).translate(0,.5,0),new THREE.MeshBasicMaterial({toneMapped:false,transparent:true,opacity:.92}),BN);
+bars.frustumCulled=false;bars.renderOrder=5;scene.add(bars);
+const bh=new Float32Array(BN),bc=new Float32Array(BN);
+const dm=new THREE.Object3D(),colLo=new THREE.Color(0x2f7fff),colMid=new THREE.Color(0x8fdcff),colHi=new THREE.Color(0xffd27a),colT=new THREE.Color();
+let barOwner=null;
+function own(w){if(barOwner!==w){barOwner=w;bh.fill(0);bc.fill(0);drawBars();}}
+function barCol(k){return k<.5?colT.copy(colLo).lerp(colMid,k*2):colT.copy(colMid).lerp(colHi,k*2-1);}
+function drawBars(){for(let i=0;i<BN;i++){const on=bh[i]>0;dm.position.set(BX(i),on?.01:-9,0);dm.scale.set(on?1:1e-5,on?Math.max(.001,bh[i]):1e-5,on?1:1e-5);dm.updateMatrix();bars.setMatrixAt(i,dm.matrix);barCol(bc[i]);bars.setColorAt(i,colT);}
+ bars.instanceMatrix.needsUpdate=true;if(bars.instanceColor)bars.instanceColor.needsUpdate=true;}
+drawBars();
+
+// 光
+const hemi=new THREE.HemisphereLight(0xcfdcee,0x2a241e,1);scene.add(hemi);
+const key=new THREE.DirectionalLight(0xfff0dd,2.2);key.position.set(6,10,9);key.castShadow=true;key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:36});key.shadow.bias=-.0005;key.shadow.normalBias=.02;scene.add(key);
+const moon=new THREE.DirectionalLight(0x8aa6d8,0);moon.position.set(2,6,12);scene.add(moon);
+
+const envMats=[];scene.traverse(o=>{const m=o.material;if(m&&m.isMeshStandardMaterial&&!envMats.some(e=>e[0]===m))envMats.push([m,m.envMapIntensity]);});
+// カメラ
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const keys=[
+ {p:0,c:V(4.2,4.4,15),l:V(.6,-.5,0)},{p:.11,c:V(3.6,3.6,13.4),l:V(.8,-.7,0)},
+ {p:.17,c:V(4.4,1.1,10.6),l:V(1.9,-1.3,0)},{p:.245,c:V(3.9,-.7,6.1),l:V(2.3,-1.25,0)},
+ {p:.285,c:V(2.6,.3,12.4),l:V(1.2,-1.3,0)},{p:.365,c:V(1.6,.2,13.6),l:V(.9,-1.25,0)},
+ {p:.41,c:V(2.2,2.6,15),l:V(.7,-.7,0)},{p:.5,c:V(2.6,2.3,13.8),l:V(.9,-.75,0)},
+ {p:.545,c:V(-5,1.1,7.4),l:V(-4.5,-.45,0)},{p:.615,c:V(-4.5,.9,7),l:V(-4.2,-.45,0)},
+ {p:.65,c:V(2,3,13.5),l:V(1.5,.05,0)},{p:.745,c:V(2.6,2.8,12.6),l:V(2,.05,0)},
+ {p:.785,c:V(3.9,.2,6.8),l:V(2.5,-.75,0)},{p:.835,c:V(3.7,.05,6.2),l:V(2.5,-.8,0)},
+ {p:.865,c:V(2.2,7.6,15.5),l:V(1.5,-.1,-.2)},{p:.95,c:V(2.2,7.4,15.2),l:V(1.5,-.1,-.2)},
+ {p:.975,c:V(1.8,1.2,11.6),l:V(.8,-1.1,0)},{p:1,c:V(1.8,1,11),l:V(.8,-1.1,0)}];
+const cp=new THREE.Vector3(),cl=new THREE.Vector3();
+function camAt(p){let i=0;while(i<keys.length-2&&p>keys[i+1].p)i++;const a=keys[i],b=keys[i+1],t=ss(a.p,b.p,p);cp.copy(a.c).lerp(b.c,t);cl.copy(a.l).lerp(b.l,t);}
+
+const caps=[...document.querySelectorAll('.cap')].map(el=>({el,a:+el.dataset.a,b:+el.dataset.b}));
+const hint=document.getElementById('hint'),barI=document.querySelector('#bar i');
+let W=0,H=0,portrait=false;
+function resize(){W=innerWidth;H=innerHeight;portrait=W<=760||W/H<=1;renderer.setSize(W,H,false);camera.aspect=W/H;camera.fov=portrait?52:36;
+ if(portrait)camera.setViewOffset(W,H,0,H*.15,W,H);else camera.setViewOffset(W,H,-W*.17,0,W,H);camera.updateProjectionMatrix();
+ jU.uPx.value=renderer.getPixelRatio()*H/900;
+ if(UI.scope){const r=UI.scope.getBoundingClientRect();if(r.width>0){UI.scope.width=r.width*2;UI.scope.height=r.height*2;}}}
+addEventListener('resize',resize);resize();
+
+// ── 遊び：もれを探す ──
+const game={x:+UI.slider.value,z:0,lx:0,revealed:false,rv:0,camX:0,sAmp:{low:0,mid:0,high:0,total:0}};
+const XMIN=S.play.xMin,XMAX=S.play.xMax;
+function newGame(){const lx=rnd(XMIN+2.5,XMAX-1.6);game.lx=lx;game.moved=false;game.revealed=false;game.x=XMIN;game.z=0;UI.slider.value=XMIN;UI.res.textContent='';UI.dig.textContent=S.play.dig;bh.fill(0);bc.fill(0);drawBars();}
+newGame();
+UI.slider.addEventListener('input',()=>{if(game.revealed)return;game.x=+UI.slider.value;game.z=0;game.moved=true;});
+UI.dig.addEventListener('click',()=>{
+ if(game.revealed){newGame();return;}
+ game.revealed=true;const d=Math.abs(game.x-game.lx),P=S.play;
+ UI.res.textContent=d<P.near?P.resultNear:d<P.close?P.resultClose:P.resultFar;UI.dig.textContent=P.again;});
+const ray=new THREE.Raycaster(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),0),ndc=new THREE.Vector2(),hit=new THREE.Vector3();
+let inPlay=false;
+let lastX=null;
+function pointer(e){if(!inPlay||game.revealed)return;
+ if(portrait){ // 縦長は横にドラッグ（縦はスクロールのまま）
+  if(e.type==='pointerdown'){lastX=e.clientX;return;}
+  if(!e.buttons&&e.pointerType==='mouse'){lastX=null;return;}
+  if(lastX===null){lastX=e.clientX;return;}
+  game.x=Math.max(XMIN,Math.min(XMAX,game.x+(e.clientX-lastX)/W*6));lastX=e.clientX;game.z=0;game.moved=true;UI.slider.value=game.x;return;}
+ // setViewOffset ぶんは行列に入っているので、素の座標で引く
+ ndc.set(e.clientX/W*2-1,-(e.clientY/H)*2+1);ray.setFromCamera(ndc,camera);
+ if(ray.ray.intersectPlane(plane,hit)){game.x=Math.max(XMIN,Math.min(XMAX,hit.x));game.z=Math.max(ZB+.3,Math.min(ZF-.3,hit.z));game.moved=true;UI.slider.value=game.x;}}
+canvas.addEventListener('pointermove',pointer);canvas.addEventListener('pointerdown',pointer);
+addEventListener('pointerup',()=>{lastX=null;});addEventListener('pointercancel',()=>{lastX=null;});
+
+// 合成音（ボタンを押すまで作らない。場面を離れたら閉じる）
+let AC=null,bands=null;
+function soundOn(){if(AC)return;AC=new (window.AudioContext||window.webkitAudioContext)();
+ const len=AC.sampleRate*2,buf=AC.createBuffer(1,len,AC.sampleRate),ch=buf.getChannelData(0);for(let i=0;i<len;i++)ch[i]=Math.random()*2-1;
+ const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
+ const master=AC.createGain();master.gain.value=SND.volume;master.connect(AC.destination);bands={};
+ for(const b of['low','mid','high']){const fl=AC.createBiquadFilter();fl.type='bandpass';fl.frequency.value=SND.freq[b];fl.Q.value=.8;const g=AC.createGain();g.gain.value=0;src.connect(fl);fl.connect(g);g.connect(master);bands[b]=g;}
+ src.start();UI.snd.textContent=S.play.soundOff;}
+function soundOff(){if(!AC)return;try{AC.close();}catch(e){}AC=null;bands=null;UI.snd.textContent=S.play.soundOn;}
+UI.snd.addEventListener('click',()=>{AC?soundOff():soundOn();});
+addEventListener('pagehide',soundOff);
+
+function drawScope(t,a){const c=UI.scope,g=c.getContext('2d'),w=c.width,h=c.height;g.clearRect(0,0,w,h);
+ g.strokeStyle='rgba(127,212,255,.14)';g.lineWidth=1;g.beginPath();g.moveTo(0,h/2);g.lineTo(w,h/2);g.stroke();
+ const line=(col,lw,fn)=>{g.strokeStyle=col;g.lineWidth=lw;g.beginPath();for(let i=0;i<=w;i+=2){const u=i/w,y=h/2-fn(u)*h*.44;i?g.lineTo(i,y):g.moveTo(i,y);}g.stroke();};
+ const A=x=>Math.min(1,x);
+ line('#3d86ff',3,u=>A(a.low)*.62*Math.sin(u*9-t*4.2));
+ line('#62dcff',2.4,u=>A(a.mid)*.5*Math.sin(u*31-t*9));
+ line('#ffffff',2,u=>A(a.high)*.42*(Math.sin(u*97-t*17)*.6+Math.sin(u*151+t*23)*.4));}
+
+function apply(p,t){
+ const play=p>=.85&&p<.955;
+ const finale=p>=.955;
+ // ふた
+ const open0=ss(.125,.195,p)*(1-ss(.826,.842,p));
+ if(finale||(play&&game.revealed))game.rv+=(1-game.rv)*.1;else game.rv+=(0-game.rv)*.2;
+ if(frozen!==null&&finale)game.rv=1;
+ const open=p>=.85?game.rv:open0;
+ const la=1-open;lidSoil.opacity=la;lidRoad.opacity=la;lidSoil.depthWrite=lidRoad.depthWrite=la>.97;lid.visible=la>.005;lid.position.z=open*.9;
+ roadOverB.visible=la>.55;
+ // もれの位置
+ const lx=p>=.845?game.lx:S.leakX;LEAK.x=lx;holeMark.position.x=lx;
+ // 夜
+ const night=ss(.415,.5,p);
+ scene.background.copy(DAYC).lerp(NIGHTC,night);
+ hemi.intensity=1-.76*night;hemi.color.setHex(0xcfdcee);
+ key.intensity=2.2*(1-night);moon.intensity=.62*night;
+ for(const L of lamps)L.intensity=9*night;
+ for(const[m,b]of envMats)m.envMapIntensity=b*(1-.72*night);bulbM.emissiveIntensity=4*night;starM.opacity=.8*night;
+ for(const w of winMats)w.emissiveIntensity=.85*night;
+ renderer.toneMappingExposure=1.02+.18*night;
+ // 車：夜になると走り去る
+ const leave=ss(.415,.485,p);
+ cars.forEach((c,i)=>{const L=2*LX,base=((((t*c.sp+c.off)%L)+L)%L)-LX;let x=c.dir>0?base:-base;x+=c.dir*leave*22;
+  const fade=ss(LX,LX-.9,Math.abs(x))*(c.z>0?la:1);c.g.visible=fade>.01&&p<.52;c.g.scale.setScalar(Math.max(.001,fade));c.g.position.set(x,0,c.z);c.g.rotation.y=c.dir>0?0:Math.PI;U.uCars.value[i].set(x,.1,c.z);});
+ // 波と水
+ const story=p<.845;
+ U.uWave.value=story?ss(.25,.3,p)*(1-.5*ss(.76,.79,p)):open*.95;
+ U.uDay.value=ss(.368,.4,p)*(1-ss(.43,.5,p));
+ const jet=story?ss(.185,.23,p):open;
+ jU.uOn.value=jet*(story?(1-ss(.838,.845,p)):1);U.uT.value=t;
+ jets.visible=jet>.01;
+ U.uWet.value=story?ss(.18,.25,p):open;
+ // バルブで聞く
+ const onV=ss(.525,.55,p)*(1-ss(.61,.625,p));
+ U.uGlow.value=onV;
+ rod.visible=false;
+ if(onV>.01)setRod(VX,.03+(1-onV)*.6,1.05+(1-onV)*.6,0);
+ // 路面を順に聞く
+ const walk=(p-.65)/(.74-.65);
+ det.visible=false;
+ if(p>.635&&p<.758){own('story');const k=Math.max(0,Math.min(1,walk)),n=20,fx=k*n,i=Math.floor(fx),fr=fx-i,x0=-2.5+i*.5,e=ss(.55,1,fr);
+  const x=x0+.5*e;det.visible=true;det.position.set(x,Math.sin(e*Math.PI)*.22+.01,0);det.scale.setScalar(ss(.635,.65,p)*(1-ss(.745,.758,p))+.001);
+  bh.fill(0);bc.fill(0);for(let j=0;j<BN;j++){const bx=BX(j);if(bx>x+.01||bx<-2.6)continue;const s=sense(bx,0,S.leakX);bh[j]=s.total*BH;bc[j]=Math.min(1,s.high*1.05);}drawBars();
+  const s=sense(x,0,S.leakX);U.uProbe.value.set(x,.01,0);U.uPA.value.set(s.low,s.mid,s.high);}
+ else if(!play&&!finale){if(p<=.635)own('story');if(p<=.635&&bh.some(v=>v>0)){bh.fill(0);bc.fill(0);drawBars();}U.uPA.value.set(0,0,0);}
+ if(play||finale)own('play');
+ bars.material.opacity=p>.745&&p<.85?.92*(1-ss(.752,.785,p)):.92;
+ bars.visible=(p>.635&&p<.79)||play||finale;
+ // 細い穴と音聴棒
+ const boreOn=ss(.765,.79,p)*(1-ss(.83,.843,p));
+ bore.visible=boreTop.visible=boreOn>.01;
+ if(bore.visible){const tip=PY+PR+.1,dy=(0-tip)*boreOn;bore.scale.y=Math.max(.001,dy);bore.position.set(S.leakX+.45,-dy/2,.012);boreTop.position.set(S.leakX+.45,.01,.0);
+  setRod(S.leakX+.45,-dy,.68,.03);}
+ // 遊び
+ inPlay=play;
+ if(play){const s=sense(game.x,game.z,game.lx);game.sAmp=s;
+  if(!game.revealed){det.visible=true;det.scale.setScalar(1);det.position.set(game.x,.01,game.z);U.uProbe.value.set(game.x,.01,game.z);U.uPA.value.set(s.low,s.mid,s.high);
+   const j=Math.round((game.x+7.5)/.5);if(game.moved&&j>=0&&j<BN&&Math.abs(BX(j)-game.x)<.25&&Math.abs(game.z)<1){const v=s.total*BH;if(Math.abs(bh[j]-v)>.002){bh[j]=v;bc[j]=Math.min(1,s.high*1.05);drawBars();}}}
+  else{det.visible=true;det.scale.setScalar(1);det.position.set(game.x,.01,game.z);U.uPA.value.set(0,0,0);}
+  drawScope(t,s);
+  if(AC&&bands){const now=AC.currentTime;for(const b of['low','mid','high'])bands[b].gain.setTargetAtTime(Math.min(1,s[b])*(b=='high'?.7:b=='mid'?.75:1),now,.04);}
+ }else if(AC)soundOff();
+ if(finale)U.uPA.value.set(0,0,0);
+ camAt(p);
+ if(play||finale){const fx=portrait?(play&&!game.revealed?game.x:game.lx)-cl.x:0;const want=fx;game.camX+=(want-game.camX)*(frozen!==null?1:.08);cp.x+=game.camX;cl.x+=game.camX;}else game.camX=0;
+ if(portrait){const d=cp.clone().sub(cl);camera.position.copy(cl).add(d.multiplyScalar(play?.62:1.12));}else camera.position.copy(cp);
+ camera.lookAt(cl);
+ for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
+}
+const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prog=()=>{const m=document.documentElement.scrollHeight-innerHeight;return m>0?Math.min(1,Math.max(0,scrollY/m)):0;};
+let cur=prog(),last=performance.now(),tt=0,frozen=null;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;tt+=dt;
+ const target=frozen??prog();cur+=(target-cur)*(frozen!==null||prm?1:Math.min(1,dt*5));
+ apply(cur,prm?0:tt);renderer.render(scene,camera);requestAnimationFrame(frame);}
+window.__seek=p=>{frozen=p;cur=p;tt+=.016;apply(p,tt);renderer.render(scene,camera);return renderer.info.render.triangles;};
+window.__release=()=>{frozen=null;};
+const q=new URLSearchParams(location.search);
+if(q.has('p'))frozen=+q.get('p');
+if(q.has('auto')){const s=+q.get('auto')||70,st=performance.now();(function a(n){const m=document.documentElement.scrollHeight-innerHeight,k=(n-st)/(s*1000);scrollTo(0,m*Math.min(1,k));if(k<1)requestAnimationFrame(a);})(st);}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

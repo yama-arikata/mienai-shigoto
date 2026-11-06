@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>金輪継ぎの見えない形｜見えない仕事サンプル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#f3f1ea;--mute:#c6c8c6;--ki:#ffc25a;--night:#0c1013}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Noto Sans JP",system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#scroll{height:1200vh}
+#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(9,12,15,.93) 0,rgba(9,12,15,.76) 34%,rgba(9,12,15,0) 60%)}
+#fade{position:fixed;inset:0;pointer-events:none;background:var(--night);opacity:0}
+.cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none}
+.cap h2{margin:0 0 .55em;font-weight:900;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
+.cap p{margin:0 0 .9em;font-size:clamp(15px,1.25vw,18px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
+.cap em{font-style:normal;color:var(--ki)}
+.vo{display:inline-flex;padding:10px 16px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(0,0,0,.25);color:var(--ink);font:500 14px "Noto Sans JP",sans-serif;cursor:pointer;margin-bottom:12px}
+.sl{display:block;font-size:14px;font-weight:500}
+.sl input{display:block;width:100%;margin-top:6px;accent-color:var(--ki);height:32px}
+.sl span{display:flex;justify-content:space-between}
+#tag{position:fixed;left:clamp(20px,5vw,72px);top:18px;font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#note{position:fixed;right:18px;top:18px;font-size:12px;color:var(--mute);background:rgba(9,12,15,.6);padding:5px 10px;border-radius:5px}
+#bar{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:3px;height:30vh;background:rgba(255,255,255,.16);border-radius:2px}
+#bar i{display:block;width:100%;height:0;background:var(--ink);border-radius:2px}
+#hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);font-size:13px;color:var(--mute);transition:opacity .3s}
+#err{display:none;position:fixed;inset:0;padding:30px;background:var(--night);line-height:1.8}
+@media (max-width:760px),(max-aspect-ratio:1/1){
+ #scrim{background:linear-gradient(0deg,rgba(9,12,15,.95) 0,rgba(9,12,15,.84) 36%,rgba(9,12,15,0) 58%)}
+ .cap{left:20px;right:20px;top:auto;bottom:24px;transform:none;width:auto}
+ .cap h2{font-size:clamp(24px,7vw,34px)}
+ .cap p{font-size:14.5px;line-height:1.75}
+ #bar{display:none}
+ #tag{top:12px;left:14px;font-size:11px}
+ #note{top:32px;left:14px;right:14px;font-size:10.5px;padding:3px 8px}
+ #hint{bottom:6px}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div id="scrim"></div>
+<div id="fade"></div>
+<div id="tag"></div>
+<div id="note"></div>
+<div id="bar"><i></i></div>
+<div id="caps"></div>
+<div id="hint">下へスクロール</div>
+<div id="scroll"></div>
+<div id="err">この図を表示できませんでした（お使いの端末で3D表示が使えないようです）。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+
+const S=await fetch('scene.json',{cache:'no-store'}).then(r=>r.json());
+document.getElementById('tag').textContent=S.tag;
+document.getElementById('note').textContent=S.note;
+const capsEl=document.getElementById('caps');
+let sliderEl=null;
+S.chapters.forEach(ch=>{const s=document.createElement('section');s.className='cap';s.dataset.a=ch.a;s.dataset.b=ch.b;
+ s.innerHTML=`<h2>${ch.title}</h2><p>${ch.body}</p>`;
+ if(ch.voice){const b=document.createElement('button');b.className='vo';b.textContent='▶ 職人の声を聞く';const au=new Audio(ch.voice);b.onclick=()=>{au.paused?au.play():au.pause();};s.append(b);}
+ if(ch.slider){const l=document.createElement('label');l.className='sl';const t=document.createElement('span');t.innerHTML=`<b>${ch.sliderLeft}</b><b>${ch.sliderRight}</b>`;sliderEl=document.createElement('input');sliderEl.type='range';sliderEl.min=0;sliderEl.max=1;sliderEl.step=.001;sliderEl.value=0;sliderEl.setAttribute('aria-label',ch.sliderLeft+'と'+ch.sliderRight);l.append(t,sliderEl);s.append(l);}
+ capsEl.append(s);});
+
+const canvas=document.getElementById('c');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});}
+catch(e){document.getElementById('err').style.display='block';throw e;}
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0c1013);
+const camera=new THREE.PerspectiveCamera(36,1,.05,80);
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+scene.environmentIntensity=.35;
+
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
+const mix=(a,b,t)=>a+(b-a)*t;
+// 区間ごとになめらかにつなぐ表
+const seq=(k,p)=>{if(p<=k[0][0])return k[0][1];for(let i=0;i<k.length-1;i++)if(p<=k[i+1][0])return mix(k[i][1],k[i+1][1],ss(k[i][0],k[i+1][0],p));return k[k.length-1][1];};
+function tex(size,draw,rx=1,ry=1){const c=document.createElement('canvas');c.width=c.height=size;draw(c.getContext('2d'),size);
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
+
+// ── 継手の寸法（柱の太さ=1） ──
+const J=S.joint,L2=J.length/2,E=J.tenon,W=J.slot,SS=J.step/2,K=J.slope,BAR=J.tBar,SW=J.tStem,C=J.clearance,DL=J.play;
+const FT=SS-K*(L2-W/2);                 // 先端での合わせ面の高さ
+const fR=x=>SS-K*(x-W/2);               // すき間より先端がわ
+const fL=x=>-SS+K*(-x-W/2);             // すき間より根元がわ
+const Y0=2.6,BASE=.28,FAR_A=Y0-L2-BASE,FAR_B=9;
+
+// 側面の輪郭（1本ぶん）。もう1本は同じ形を180度回したもの。
+// stem=先端のT字の縦棒を持つ帯か / pocket=根元がわの穴がT字の縦棒まで開く帯か
+function outline(far,stem,pocket){
+ const p=[];const add=(x,y)=>p.push(new THREE.Vector2(x,y));
+ add(-L2-far,-.5);
+ if(stem){add(L2+E-C,-.5);add(L2+E-C,FT-C);}
+ else{add(L2-C,-.5);add(L2-C,FT-BAR);add(L2+E-C,FT-BAR);add(L2+E-C,FT-C);}
+ add(W/2,fR(W/2)-C);
+ add(W/2,-SS-C);
+ add(-W/2,-SS-C);
+ add(-L2,fL(-L2)-C);
+ add(-L2-E,fL(-L2)-C);
+ if(pocket){add(-L2-E,.5);}
+ else{add(-L2-E,fL(-L2)+BAR+C);add(-L2,fL(-L2)+BAR+C);add(-L2,.5);}
+ add(-L2-far,.5);
+ return p;
+}
+// 奥行きを5つの帯に分けて押し出す（縦棒とその穴に、ほんのわずかな遊びをつけるため）
+function pieceGeos(far){
+ const z=[-.5,-SW/2,-SW/2+C,SW/2-C,SW/2,.5],out=[];
+ for(let i=0;i<5;i++){const stem=i===2,pocket=i>=1&&i<=3;
+  const g=new THREE.ExtrudeGeometry(new THREE.Shape(outline(far,stem,pocket)),{depth:z[i+1]-z[i],bevelEnabled:false,steps:1});
+  g.translate(0,0,z[i]);out.push(g);}
+ return out;
+}
+
+// ── 木の材質：木そのものを3次元の模様で作る（切り口に年輪が正しく出る） ──
+const hex=c=>new THREE.Color(c),AC=hex(S.wood.accent);
+const NOISE=`float hh(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float vn(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+ return mix(mix(mix(hh(i),hh(i+vec3(1,0,0)),f.x),mix(hh(i+vec3(0,1,0)),hh(i+vec3(1,1,0)),f.x),f.y),
+  mix(mix(hh(i+vec3(0,0,1)),hh(i+vec3(1,0,1)),f.x),mix(hh(i+vec3(0,1,1)),hh(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fb(vec3 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*vn(p);p=p*2.03+7.1;a*=.5;}return v;}`;
+function wood(o){
+ const u={uB:{value:hex(o.base)},uL:{value:hex(o.late)},uB2:{value:hex(o.base2||o.base)},uL2:{value:hex(o.late2||o.late)},uSep:{value:1},uSeed:{value:o.seed||0},uRC:{value:new THREE.Vector2(...(o.rc||[-1.3,.5]))},uRF:{value:o.rf||15},
+  uHiT:{value:0},uHiS:{value:0},uRot:{value:0},uFl:{value:0},uFlY:{value:0},uSwap:{value:o.swap?1:0},uAc:{value:AC},uJ:{value:new THREE.Vector4(L2,E,W,SS)},uGlow:{value:0}};
+ const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.62,metalness:0,envMapIntensity:.7,side:o.ds?THREE.DoubleSide:THREE.FrontSide});
+ m.userData.u=u;
+ m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>',`#include <common>
+   uniform float uSwap;varying vec3 vP;varying vec3 vOn;varying vec3 vWp;`).replace('#include <begin_vertex>',`#include <begin_vertex>
+   vP=uSwap>.5?position.zyx:position;vOn=uSwap>.5?normal.zyx:normal;vWp=(modelMatrix*vec4(position,1.)).xyz;`);
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
+   uniform vec3 uB,uL,uB2,uL2,uAc;uniform float uSep,uSeed,uRF,uHiT,uHiS,uRot,uFl,uFlY,uGlow;uniform vec2 uRC;uniform vec4 uJ;varying vec3 vP;varying vec3 vOn;varying vec3 vWp;
+   ${NOISE}
+   float gFib,gLate,gEnd,gRot;`).replace('#include <color_fragment>',`#include <color_fragment>
+   {vec3 P=vP+vec3(uSeed*3.1,0.,0.);
+    vec3 q0=P*vec3(.28,1.1,1.1)+uSeed;
+    vec2 q=vP.yz+uRC+.34*vec2(vn(q0*vec3(.55,.5,.5)),vn(q0*vec3(.55,.5,.5)+9.2))-.17;
+    float r=length(q)+.035*fb(P*vec3(.7,2.2,2.2));
+    float rr=r*uRF;float g=fract(rr);float wd=.75+.25*vn(vec3(floor(rr)*3.7,uSeed,1.));
+    float lt=smoothstep(.25,.93,g)*(1.-smoothstep(.95,1.,g))*wd;
+    float fib=fb(P*vec3(1.6,70.,70.));
+    float pore=smoothstep(.62,.8,vn(P*vec3(9.,210.,210.)));
+    vec3 cB=mix(uB2,uB,uSep),cL=mix(uL2,uL,uSep);
+    float en0=smoothstep(.5,.95,abs(normalize(vOn).x));vec3 c=mix(cB,cL,lt*(.62-.34*en0));
+    c*=.84+.32*fib;c*=1.-.13*pore;
+    c*=.94+.12*fb(P*vec3(.4,3.,3.));
+    float en=abs(normalize(vOn).x);gEnd=en;
+    c*=mix(1.,.72,smoothstep(.5,.95,en));
+    gFib=fib;gLate=lt;
+    float m=0.;
+    // 傷み
+    if(uRot>0.001){float nn=fb(P*vec3(1.2,5.,5.)+3.);float crack=smoothstep(.56,.5,abs(fb(P*vec3(1.,16.,16.)+5.)-.5)+.5);
+     m=uRot*smoothstep(-.9,-2.25,vP.x+(nn-.5)*1.5);
+     vec3 rc=mix(vec3(.11,.08,.06),vec3(.03,.024,.02),smoothstep(.35,.65,fb(P*vec3(2.,9.,9.))));
+     c=mix(c,rc,smoothstep(.1,.75,m));
+     c=mix(c,vec3(.015),crack*smoothstep(.45,.8,m));
+     if(m>.72&&nn>.56)discard;}
+    gRot=m;
+    // 説明のための色づけ
+    float inside=step(abs(vP.y),.4985)*step(abs(vP.z),.4985);
+    float tn=smoothstep(uJ.x-.003,uJ.x+.003,vP.x);
+    float pk=(1.-smoothstep(-uJ.x-.003,-uJ.x+.003,vP.x))*inside;
+    c=mix(c,uAc,max(tn,pk)*uHiT*.82);
+    float sl=step(abs(vP.x),uJ.z/2.+.004)*step(abs(vP.y),uJ.w+.012)*inside;
+    c=mix(c,uAc,sl*uHiS*.85);
+    diffuseColor.rgb=c;}`).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+    roughnessFactor=mix(.5+.2*gFib,.82,smoothstep(.5,.95,gEnd))+.08*gLate;roughnessFactor=mix(roughnessFactor,1.,gRot);`).replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+    {float d=abs(vWp.y-${Y0.toFixed(2)})-uFlY;float b=exp(-d*d*26.);totalEmissiveRadiance+=vec3(1.,.66,.28)*b*uFl*.5*(.4+.6*gFib);}`);
+ };
+ return m;
+}
+const W_=S.wood;
+const matA=wood({base:W_.newBase,late:W_.newLate,base2:W_.sameBase,late2:W_.sameLate,seed:2.3,rc:[-1.25,.55],rf:8.5});
+const matB=wood({base:W_.oldBase,late:W_.oldLate,base2:W_.sameBase,late2:W_.sameLate,seed:7.1,rc:[1.2,-.4],rf:9.5});
+const matPin=wood({base:W_.pinBase,late:W_.pinLate,seed:4.4,rc:[-.9,.2],rf:30,swap:true});
+const matOldUp=wood({base:W_.oldBase,late:W_.oldLate,seed:7.1,rc:[1.2,-.4],rf:9.5});
+const matStub=wood({base:W_.oldBase,late:W_.oldLate,seed:7.1,rc:[1.2,-.4],rf:9.5});
+const matNew=wood({base:W_.newBase,late:W_.newLate,seed:2.3,rc:[-1.25,.55],rf:8.5});
+
+// 地面と壁
+const floorTex=tex(1024,(g,s)=>{g.fillStyle='#34302a';g.fillRect(0,0,s,s);for(let i=0;i<26000;i++){g.fillStyle=['#2a2722','#403b34','#1f1d19','#4a443b'][i%4];g.globalAlpha=rnd(.05,.26);g.beginPath();g.arc(rnd(s),rnd(s),rnd(.4,2.2),0,7);g.fill();}g.globalAlpha=1;},5,4);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(50,40),new THREE.MeshStandardMaterial({map:floorTex,roughness:.96,envMapIntensity:.3}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+const wallTex=tex(1024,(g,s)=>{g.fillStyle='#5b5449';g.fillRect(0,0,s,s);for(let i=0;i<30000;i++){g.fillStyle=['#4f493f','#655e52','#463f36','#6f6859'][i%4];g.globalAlpha=rnd(.04,.2);g.beginPath();g.arc(rnd(s),rnd(s),rnd(.4,1.8),0,7);g.fill();}g.strokeStyle='#4f483e';for(let i=0;i<500;i++){g.globalAlpha=rnd(.05,.2);g.lineWidth=rnd(.3,.9);g.beginPath();const x=rnd(s),y=rnd(s),a=rnd(6.28);g.moveTo(x,y);g.lineTo(x+Math.cos(a)*rnd(5,24),y+Math.sin(a)*rnd(5,24));g.stroke();}g.globalAlpha=1;},4,3);
+const wall=new THREE.Mesh(new THREE.PlaneGeometry(50,24),new THREE.MeshStandardMaterial({map:wallTex,bumpMap:wallTex,bumpScale:.02,roughness:.95,envMapIntensity:.25}));wall.position.set(0,12,-4.2);wall.receiveShadow=true;scene.add(wall);
+
+// 礎石（柱の下の石）
+{const pr=[[0,.33],[.72,.33],[.92,.315],[1.06,.26],[1.2,.14],[1.3,.03],[1.34,0]].map(a=>new THREE.Vector2(a[0],a[1]));const pts=new THREE.SplineCurve(pr).getPoints(30);pts[0].x=0;pts.reverse();
+ const g=new THREE.LatheGeometry(pts,96);const q=g.attributes.position;const nz=(x,z)=>Math.sin(x*2.1+1.3)*Math.cos(z*2.7)*.5+Math.sin(x*5.3+z*4.1)*.25+Math.sin(x*11+z*9)*.1;
+ for(let i=0;i<q.count;i++){const x=q.getX(i),y=q.getY(i),z=q.getZ(i),a=Math.atan2(z,x),rr=Math.hypot(x,z),f=1+.035*Math.sin(a*2+1)+.02*Math.sin(a*5+2)+.012*Math.sin(a*11);const edge=Math.min(1,rr/1.34);q.setXYZ(i,x*f,y+nz(x,z)*.012*edge-.16,z*f);}g.computeVertexNormals();
+ const st=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:tex(512,(g2,s)=>{g2.fillStyle='#6f6d68';g2.fillRect(0,0,s,s);for(let i=0;i<9000;i++){g2.fillStyle=['#5b5954','#83807a','#4b4a46'][i%3];g2.globalAlpha=rnd(.08,.3);g2.beginPath();g2.arc(rnd(s),rnd(s),rnd(.4,2.5),0,7);g2.fill();}g2.globalAlpha=1;}),roughness:.92,envMapIntensity:.4}));
+ st.position.y=BASE-.17;st.castShadow=st.receiveShadow=true;scene.add(st);}
+
+// 継手一式。局所のx=柱の上下、局所のy=部材が離れる向き、局所のz=栓の向き
+const rig=new THREE.Group();
+rig.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(0,1,0,0, 1,0,0,0, 0,0,-1,0, 0,0,0,1));
+rig.position.set(0,Y0,0);scene.add(rig);
+const toGroup=(geos,mat)=>{const g=new THREE.Group();geos.forEach(ge=>{const m=new THREE.Mesh(ge,mat);m.castShadow=m.receiveShadow=true;g.add(m);});return g;};
+const joint=new THREE.Group();rig.add(joint);
+const A=toGroup(pieceGeos(FAR_A),matA);joint.add(A);
+const B=toGroup(pieceGeos(FAR_B),matB);B.rotation.z=Math.PI;joint.add(B);
+
+// 栓：先へ行くほどわずかに細い
+const PL=1.02;
+{const g=new THREE.BoxGeometry(W-C*.5,SS*2-C*.5,PL,1,1,6);const q=g.attributes.position;for(let i=0;i<q.count;i++){const z=q.getZ(i),t=(z+PL/2)/PL;q.setX(i,q.getX(i)*(1-t*DL/W));if(t>.97){q.setX(i,q.getX(i)*.8);q.setY(i,q.getY(i)*.8);}}g.computeVertexNormals();var pin=new THREE.Mesh(g,matPin);pin.castShadow=pin.receiveShadow=true;joint.add(pin);}
+
+// すき間の奥の光
+const slotGlow=new THREE.Mesh(new THREE.PlaneGeometry(.7,.7),new THREE.MeshBasicMaterial({color:AC,transparent:true,opacity:0,toneMapped:false,side:THREE.DoubleSide}));slotGlow.position.set(0,0,.54);joint.add(slotGlow);
+
+// 重ね合わせの見せ方：下の木と同じ形の輪郭線を回して上の木に重ねる
+const ghost=new THREE.Group();joint.add(ghost);
+const ghostLine=new THREE.LineBasicMaterial({color:AC,transparent:true,opacity:0,toneMapped:false,depthTest:false});
+const ghostFill=new THREE.MeshBasicMaterial({color:AC,transparent:true,opacity:0,depthWrite:false,toneMapped:false});
+pieceGeos(FAR_A).forEach(g=>{const l=new THREE.LineSegments(new THREE.EdgesGeometry(g,25),ghostLine);l.renderOrder=6;ghost.add(l);const f=new THREE.Mesh(g,ghostFill);f.renderOrder=5;ghost.add(f);});
+
+// 継ぐ前の柱（根元が傷んでいる）
+const oldG=new THREE.Group();rig.add(oldG);
+const box=(x0,x1)=>{const g=new THREE.BoxGeometry(x1-x0,1,1);g.translate((x0+x1)/2,0,0);return g;};
+const CUT=-.2;
+const oldUp=new THREE.Mesh(box(CUT,FAR_B),matOldUp);oldUp.castShadow=oldUp.receiveShadow=true;oldG.add(oldUp);
+const stub=new THREE.Mesh(box(BASE-Y0,CUT),matStub);stub.castShadow=stub.receiveShadow=true;oldG.add(stub);
+const newStub=new THREE.Mesh(box(BASE-Y0,CUT),matNew);newStub.castShadow=newStub.receiveShadow=true;oldG.add(newStub);
+
+// 木づち
+const mallet=new THREE.Group();
+{const hd=new THREE.CylinderGeometry(.22,.22,.62,40).rotateX(Math.PI/2);const hm=wood({base:'#6d4526',late:'#42280f',seed:9.2,rc:[.1,.15],rf:24,swap:true});
+ const head=new THREE.Mesh(hd,hm);head.position.set(0,1.45,0);head.castShadow=true;mallet.add(head);
+ const hg=new THREE.CylinderGeometry(.05,.062,1.5,20);hg.translate(0,.75,0);const handle=new THREE.Mesh(hg,new THREE.MeshStandardMaterial({color:0x8c6239,roughness:.55}));handle.castShadow=true;mallet.add(handle);}
+mallet.visible=false;scene.add(mallet);
+
+// 打ったときの木くず
+const dotTex=tex(64,(g,s)=>{const r=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.4,'rgba(255,255,255,.7)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,s,s);});
+const DN=260,dp=new Float32Array(DN*3),dv=new Float32Array(DN*3);
+for(let i=0;i<DN;i++){const top=i%2;dp[i*3]=(top?1:-1)*(L2-.005);dp[i*3+1]=(top?-1:1)*rnd(.05,.5);dp[i*3+2]=rnd(-.5,.5);
+ const a=rnd(6.28);dv[i*3]=(top?1:-1)*rnd(.1,.5)+Math.cos(a)*.1;dv[i*3+1]=rnd(-.6,.6);dv[i*3+2]=-rnd(.2,1.1);}
+const dG=new THREE.BufferGeometry();dG.setAttribute('position',new THREE.BufferAttribute(dp,3));dG.setAttribute('aV',new THREE.BufferAttribute(dv,3));
+const dU={uK:{value:0},uA:{value:0},uPx:{value:1},uTex:{value:dotTex}};
+const dust=new THREE.Points(dG,new THREE.ShaderMaterial({uniforms:dU,transparent:true,depthWrite:false,
+ vertexShader:`attribute vec3 aV;uniform float uK,uPx;void main(){vec3 p=position+aV*uK;p.y+=0.;vec4 w=modelMatrix*vec4(p,1.);w.y-=2.2*uK*uK;vec4 mv=viewMatrix*w;gl_PointSize=uPx*(5.+8.*fract(position.z*37.))/max(.5,-mv.z);gl_Position=projectionMatrix*mv;}`,
+ fragmentShader:`uniform sampler2D uTex;uniform float uA;void main(){float a=texture2D(uTex,gl_PointCoord).a*uA;if(a<.01)discard;gl_FragColor=vec4(vec3(.95,.78,.52),a);}`}));
+dust.frustumCulled=false;dust.renderOrder=7;rig.add(dust);
+
+// 光
+scene.add(new THREE.HemisphereLight(0xcfdce8,0x3a2f24,.62));
+const key=new THREE.SpotLight(0xffe6c4,150,40,.7,.95,1.6);key.position.set(-6.5,11,9);key.target.position.set(.4,2.6,0);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.camera.near=2;key.shadow.camera.far=32;key.shadow.bias=-.0004;key.shadow.normalBias=.015;scene.add(key,key.target);
+const rimL=new THREE.DirectionalLight(0x9fc0e6,.75);rimL.position.set(7,5,-1);scene.add(rimL);
+const front=new THREE.DirectionalLight(0xfff2de,.28);front.position.set(2,3,9);scene.add(front);
+const under=new THREE.DirectionalLight(0xffdcb0,.55);under.position.set(-1,-4,3);scene.add(under);
+
+// カメラ
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const keys=[
+ {p:0,c:V(3.4,2.9,10.8),l:V(0,2.75,0)},{p:.115,c:V(2.7,2.7,9.4),l:V(0,2.55,0)},
+ {p:.124,c:V(3.6,1.9,8.0),l:V(.25,1.9,0)},{p:.255,c:V(3.0,1.9,7.2),l:V(.25,1.9,0)},
+ {p:.264,c:V(3.6,3.4,11.6),l:V(.75,3.05,0)},{p:.405,c:V(2.6,3.4,11),l:V(.75,3.05,0)},
+ {p:.44,c:V(-2.8,7.3,5.2),l:V(.25,4.0,0)},{p:.515,c:V(-2.5,7.1,4.9),l:V(.25,4.0,0)},
+ {p:.56,c:V(2.8,3.4,10.4),l:V(.15,2.95,0)},{p:.615,c:V(1.7,3,8),l:V(0,2.7,0)},
+ {p:.645,c:V(.2,2.62,6.2),l:V(0,2.6,0)},{p:.668,c:V(.2,2.62,5.7),l:V(0,2.6,0)},
+ {p:.695,c:V(-5.2,3.4,5.8),l:V(.1,2.75,.95)},{p:.8,c:V(-4.9,3.25,5.5),l:V(.1,2.7,.8)},
+ {p:.85,c:V(3.3,2.9,10.8),l:V(0,2.75,0)},{p:.905,c:V(2.9,2.8,10.4),l:V(0,2.7,0)},
+ {p:.93,c:V(2.6,3.2,10.6),l:V(.6,3.05,0)},{p:1,c:V(2.5,3.2,10.4),l:V(.6,3.05,0)}];
+const cp=new THREE.Vector3(),cl=new THREE.Vector3();
+function camAt(p){let i=0;while(i<keys.length-2&&p>keys[i+1].p)i++;const a=keys[i],b=keys[i+1],t=ss(a.p,b.p,p);cp.copy(a.c).lerp(b.c,t);cl.copy(a.l).lerp(b.l,t);}
+
+const caps=[...document.querySelectorAll('.cap')].map(el=>({el,a:+el.dataset.a,b:+el.dataset.b}));
+const hint=document.getElementById('hint'),barI=document.querySelector('#bar i'),fadeEl=document.getElementById('fade');
+let W2=0,H2=0,portrait=false;
+function resize(){W2=innerWidth;H2=innerHeight;portrait=W2<=760||W2/H2<=1;renderer.setSize(W2,H2,false);camera.aspect=W2/H2;camera.fov=portrait?52:36;
+ if(portrait)camera.setViewOffset(W2,H2,0,H2*.2,W2,H2);else camera.setViewOffset(W2,H2,-W2*.17,0,W2,H2);camera.updateProjectionMatrix();
+ dU.uPx.value=renderer.getPixelRatio()*H2/900*6;}
+addEventListener('resize',resize);resize();
+
+const HITS=[.70,.72,.74,.755,.77,.785];
+const HLAST=HITS[HITS.length-1];
+const DRV=[.2,.4,.58,.74,.88,1];
+const SY=1.45,AX=.7,SYC=.5+FT-C+.012;
+const syKeys=[[.264,SY],[.435,SY],[.472,SYC],[.48,SYC+.055],[.487,SYC],[.5,SYC],[.522,.78],[.532,.78],[.566,0]];
+const axKeys=[[.264,AX],[.41,AX],[.435,0],[.5,0],[.53,E+.004],[.572,E+.004],[.625,DL]];
+
+function apply(p,t){
+ const old=p>=.123&&p<.263;
+ joint.visible=!old;oldG.visible=old;
+ fadeEl.style.opacity=Math.max(ss(.106,.12,p)*(1-ss(.126,.14,p)),ss(.248,.26,p)*(1-ss(.266,.28,p)));
+
+ // ── 継ぐ前：傷み→切る→新しい木 ──
+ if(old){
+  matStub.userData.u.uRot.value=ss(.135,.175,p);
+  const out=ss(.195,.225,p);
+  stub.position.set(0,out*4.2,0);stub.visible=out<.999;
+  const inn=ss(.215,.245,p);
+  newStub.position.set(0,-(1-inn)*4.2,0);newStub.visible=inn>.001;
+ }
+
+ // ── 継手の動き ──
+ const before=p<.123;
+ let ax=before?0:seq(axKeys,p),sy=before?0:seq(syKeys,p);
+ let d=0;for(let i=0;i<HITS.length;i++){d=mix(d,DRV[i],ss(HITS[i]-.0035,HITS[i],p));}
+ let pinTipStart=mix(-2.6,-.5-.015,ss(.668,.692,p));
+ let tip=mix(pinTipStart,.5,d);
+ let pinOn=p>.668;
+ if(before)pinOn=true,tip=.5;
+ // 打つほど、ゆるみが詰まる
+ if(p>=.625&&!before)ax=DL*(1-ss(.5,1,d));
+
+ // 色：組むと同じ調子に
+ let sep=before?0:1-ss(HLAST,HLAST+.03,p);
+ const v=sliderEl?+sliderEl.value:0;
+ if(p>=.905){const on=ss(.905,.93,p);const vv=v*on;
+  tip=mix(.5,-2.3,ss(0,.4,vv));ax=(E+.004)*ss(.36,.56,vv);sy=SY*.9*ss(.54,1,vv);sep=ss(0,.22,vv);pinOn=true;}
+ matA.userData.u.uSep.value=sep;matB.userData.u.uSep.value=sep;
+ B.position.set(ax,sy,0);
+ pin.visible=pinOn&&!old;pin.position.set(0,0,tip-PL/2);
+
+ // 出っぱり・すき間の色づけ
+ const hiT=ss(.44,.47,p)*(1-ss(.61,.64,p));
+ const hiS=ss(.61,.64,p)*(1-ss(.70,.74,p));
+ for(const m of[matA,matB]){m.userData.u.uHiT.value=hiT;m.userData.u.uHiS.value=hiS;}
+
+ // 回して重ねる
+ const gv=ss(.293,.31,p)*(1-ss(.392,.41,p));
+ ghost.visible=gv>.001;
+ if(ghost.visible){ghost.rotation.z=Math.PI*ss(.31,.375,p);const m=ss(.31,.385,p);ghost.position.set(B.position.x*m,B.position.y*m,0);ghostLine.opacity=gv;ghostFill.opacity=.13*gv;}
+
+ // すき間の光
+ const gl=ss(.625,.65,p)*(1-ss(.672,.69,p));
+ slotGlow.material.opacity=gl;slotGlow.visible=gl>.001;
+
+ // 木づち
+ const mOn=p>.676&&p<.815;mallet.visible=mOn;
+ if(mOn){const headZ=tip-PL;
+  let u=0,a=0;for(let i=0;i<HITS.length;i++){const h0=i?HITS[i-1]:.676,h1=HITS[i];if(p<=h1){u=(p-h0)/(h1-h0);a=.62*ss(0,.55,u)*(1-Math.pow(ss(.62,1,u),2));break;}}
+  if(p>HLAST){const q=ss(HLAST,.81,p);a=.7*q;}
+  const away=ss(.795,.815,p);
+  mallet.position.set(0,Y0-1.45-away*2.5,-headZ+.31+away*1.5);mallet.rotation.x=a;
+ }
+
+ // 署名：最後の1打で、光が柱を上下に走る
+ let shake=0;for(const h of HITS){if(p>=h){const q=(p-h)/.005;shake+=(h===HLAST?.05:.02)*Math.exp(-q)*Math.cos(q*5);}}
+ const fq=p>=HLAST?(p-HLAST):-1;
+ const flash=fq>=0?Math.exp(-fq/.012):0;
+ for(const m of[matA,matB,matPin]){m.userData.u.uFl.value=flash;m.userData.u.uFlY.value=Math.max(0,fq)*170;}
+ const dk=fq>=0?Math.min(1,fq/.02):0;dU.uK.value=dk*1.1;dU.uA.value=fq>=0?(1-dk)*.95:0;dust.visible=dU.uA.value>.01;
+
+ camAt(p);
+ if(portrait){const d2=cp.clone().sub(cl);camera.position.copy(cl).add(d2.multiplyScalar(1.34));}else camera.position.copy(cp);
+ camera.position.y+=shake;
+ camera.lookAt(cl);
+ for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
+}
+const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prog=()=>{const m=document.documentElement.scrollHeight-innerHeight;return m>0?Math.min(1,Math.max(0,scrollY/m)):0;};
+let cur=prog(),last=performance.now(),tt=0,frozen=null;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;tt+=dt;
+ const target=frozen??prog();cur+=(target-cur)*(frozen!==null||prm?1:Math.min(1,dt*5));
+ apply(cur,prm?0:tt);renderer.render(scene,camera);requestAnimationFrame(frame);}
+window.__seek=p=>{frozen=p;cur=p;tt+=.016;apply(p,tt);renderer.render(scene,camera);return renderer.info.render.triangles;};
+window.__release=()=>{frozen=null;};
+window.__slide=v=>{if(sliderEl)sliderEl.value=v;};
+const q=new URLSearchParams(location.search);
+if(q.has('p'))frozen=+q.get('p');
+if(q.has('auto')){const s=+q.get('auto')||70,st=performance.now();(function a(n){const m=document.documentElement.scrollHeight-innerHeight,k=(n-st)/(s*1000);scrollTo(0,m*Math.min(1,k));if(k<1)requestAnimationFrame(a);})(st);}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
