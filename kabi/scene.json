@@ -98,7 +98,7 @@
   "mist": 900,
   "mold": {
     "grow": 0.97,
-    "returnGrow": 0.92,
+    "returnGrow": 0,
     "behindGrow": 0.95
   },
   "contact": "https://153161.jp/contact/",
