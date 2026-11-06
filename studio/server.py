@@ -63,7 +63,7 @@ JUDGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; for
 JUDGE_PAGE = """<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>見えない仕事の3D</title>
 <style>body{font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#10233b;color:#f0f1ec}
-form{width:min(400px,calc(100vw - 32px));background:#eceae3;color:#17222e;padding:28px 24px;border-top:6px solid #f2c230;box-sizing:border-box;box-shadow:12px 12px 0 #7d5e40,24px 24px 0 #b7986e}
+form{width:min(400px,calc(100vw - 32px));background:#eceae3;color:#17222e;padding:28px 24px;border-top:6px solid #f2c230;box-sizing:border-box;box-shadow:7px 7px 0 #7d5e40,14px 14px 0 #b7986e}
 h1{font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;font-weight:600;letter-spacing:.04em;font-size:25px;margin:0 0 10px}p{margin:0 0 18px;line-height:1.7}
 input,button{box-sizing:border-box;width:100%;font:inherit;font-size:17px;padding:14px;border-radius:3px;border:2px solid #a9a698;background:#f8f7f2;color:#17222e}input:focus{outline:3px solid #f2c230;outline-offset:1px}
 button{margin-top:12px;background:#f2c230;color:#1a1608;border:2px solid #1a1608;font-weight:800;cursor:pointer}button:focus-visible{outline:3px solid #10233b;outline-offset:2px}
