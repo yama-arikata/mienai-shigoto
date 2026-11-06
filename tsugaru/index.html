@@ -14,8 +14,9 @@
 html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Noto Sans JP",system-ui,sans-serif}
 canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #scroll{height:1100vh}
-#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(13,9,7,.93) 0,rgba(13,9,7,.76) 34%,rgba(13,9,7,0) 60%)}
+#scrim{position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(13,9,7,.84) 0,rgba(13,9,7,.58) 30%,rgba(13,9,7,0) 50%)}
 .cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none}
+.cap h2,.cap p{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.6)}
 .cap h2{margin:0 0 .55em;font-weight:900;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
 .cap p{margin:0 0 .9em;font-size:clamp(15px,1.25vw,18px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
 .cap em{font-style:normal;color:var(--shu)}
@@ -142,20 +143,35 @@ const topMat=new THREE.ShaderMaterial({uniforms:U,vertexShader:common+`varying v
    float w=fwidth(kk)*1.2,f=fract(kk);if(kk>=0.&&w>0.&&w<.6&&f<w){int a2=int(clamp(floor(kk)-1.,0.,uN-1.));c=mix(floor(kk)<1.?uCore:uPal[a2],c,.5+.5*f/w);}
    c*=.9+.2*vn(vU*23.);}
   vec3 V=normalize(cameraPosition-vW),L1=normalize(vec3(-.45,.85,.3)),L2=normalize(vec3(.6,.4,.3));
-  float rough=cut?mix(.75,.05,uGloss):.14;
+  float rough=cut?mix(.75,.05,uGloss):.26;
+  float pile=smoothstep(0.,uA*.55+1e-4,b);
+  if(!cut&&uCoats>=.02){
+   float l0=dot(c,vec3(.3,.59,.11));c=mix(vec3(l0),c,.86);c*=.8;
+   c*=.82+.36*vn(vU*31.);
+   N=normalize(N+vec3(vn(vU*520.)-.5,0.,vn(vU*520.+7.)-.5)*.1+vec3(vn(vU*90.)-.5,0.,vn(vU*90.+3.)-.5)*.1);
+  }
   if(cut&&uGloss<.5){float sc=hs(floor(vU*vec2(1400.,40.)))*.5+.5;c*=mix(.86+.14*sc,1.,uGloss*2.);N=normalize(N+vec3(0.,0.,(sc-.75)*.06*(1.-uGloss*2.)));}
-  float diff=max(dot(N,L1),0.)*.85+max(dot(N,L2),0.)*.18+.34;
+  float diff=max(dot(N,L1),0.)*.85+max(dot(N,L2),0.)*.18+.34;if(cut)diff=mix(1.5,diff,uGloss);
   float ph=mix(14.,340.,1.-rough);
   vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),ph)*(1.-rough)*.35;
   vec3 R=reflect(-V,N);
   // 高い所の格子窓が映る。研いだばかりの面はぼやけ、艶が出ると格子まで見える
   float soft=mix(.02,.5,rough);vec2 q=R.xz/(abs(R.y)+.18);
+  V=normalize(V);
   float win=smoothstep(soft,0.,max(abs(q.x+2.3)-.8,abs(q.y)-1.))*step(0.,R.y);
   vec2 cell=abs(fract(vec2(q.x+2.3,q.y)*vec2(2.1,1.45))-.5);
   win*=mix(1.,smoothstep(.0,.045,.5-max(cell.x,cell.y)),1.-rough);win*=smoothstep(.93,.995,N.y);
   float room=mix(.015,.13,smoothstep(-.1,.9,R.y));
   float fr=.045+.955*pow(1.-max(dot(N,V),0.),5.);
   vec3 col=c*diff*(1.-rough*.08)+vec3(1.,.96,.86)*(sp+(win*2.2+room)*fr*mix(.35,1.,1.-rough));
+  if(!cut&&uCoats>=.02){
+   // 漆の肌：谷は暗く、斜面に部屋の明かりが広く映る。黒い山でも形が読める
+   col*=mix(.5,1.,pile);
+   float up=smoothstep(-.05,.95,R.y);
+   float broad=pow(max(dot(N,normalize(L1+V)),0.),9.);
+   float rimL=pow(1.-max(dot(N,V),0.),2.2);
+   float lc=dot(c,vec3(.3,.59,.11));col+=mix(vec3(1.,.93,.82),c/max(lc,.001)*.9,smoothstep(.015,.07,lc)*.7)*mix(1.,.55,smoothstep(.015,.07,lc))*(mix(.004,.038,up)*mix(.4,1.,pile)+broad*.055+rimL*.03*mix(.4,1.,pile));
+  }
   if(cut){vec2 d=q-vec2(.2,-.66)+(vec2(vn(vU*7.),vn(vU*7.+9.))-.5)*.1;float sh=exp(-dot(d,d)*9.)*uGloss;col*=1.-.25*sh;col+=vec3(1.,.95,.84)*sh*.1;col*=.82+.3*uGloss;}
   gl_FragColor=vec4(col,1.);
   #include <tonemapping_fragment>
@@ -252,7 +268,7 @@ const keys=[
  {p:.17,c:V(1.6,.42,3.9),l:V(.9,-.08,2.1)},{p:.26,c:V(1.5,.42,3.7),l:V(.9,-.04,2.1)},
  {p:.31,c:V(1.9,2.4,4.2),l:V(.6,.05,1)},{p:.41,c:V(1.4,2,3.6),l:V(.5,.1,1)},
  {p:.46,c:V(1.55,.62,3.75),l:V(.72,.06,2.1)},{p:.59,c:V(1.3,.66,3.5),l:V(.68,.08,2.1)},
- {p:.635,c:V(2.8,3.8,4.8),l:V(.6,.05,.1)},{p:.68,c:V(2.6,3.5,4.6),l:V(.6,.05,.1)},
+ {p:.635,c:V(2.15,1.7,3.75),l:V(.85,.05,1.15)},{p:.68,c:V(1.95,1.55,3.5),l:V(.85,.05,1.15)},
  {p:.74,c:V(1.5,2.5,3),l:V(.5,.2,.5)},{p:.85,c:V(1.25,2.1,2.5),l:V(.5,.2,.5)},
  {p:.91,c:V(1.1,4.5,3.9),l:V(.5,-.1,.15)},{p:1,c:V(1,4.7,3.7),l:V(.5,-.1,.15)}];
 const cp=new THREE.Vector3(),cl=new THREE.Vector3();
@@ -278,8 +294,8 @@ function apply(p,t){
  U.uCoats.value=Math.max(N*finish,N*coat);
  let L=Ltop;
  if(finish>.001)L=Lgood;
- if(p>.135&&p<.72)L=Ltop;
- if(p>=.72)L=Ltop+(Lgood-Ltop)*grind;
+ if(p>.135&&p<.72)L=Ltop;if(p>.70&&p<.72)L=Ltop+(Ltop*.8-Ltop)*ss(.70,.72,p);
+ if(p>=.72)L=Ltop*.8+(Lgood-Ltop*.8)*grind;
  let gloss=finish;
  if(p>=.885){const on=ss(.885,.905,p);
   const v=sliderEl?+sliderEl.value:.5;
