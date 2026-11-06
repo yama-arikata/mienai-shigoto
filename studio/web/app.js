@@ -345,7 +345,7 @@ function moyouStage() {
 function shelf() {
   return h('section', { class: 'shelf' },
     h('h2', {}, 'ほかの仕事の見本'),
-    h('p', { class: 'mute small' }, 'どれも人の手を入れて作った見本です。道具が作るページと同じ見た目になるとは限りません。'),
+    h('p', { class: 'mute small' }, 'どれも時間をかけて作り込んだ見本です。道具が作るページと同じ見た目になるとは限りません。'),
     h('div', { class: 'shelfRow' }, SHELF.map(x => sampleLink(x.id, { class: 'shelfItem' },
       h('img', { src: '/home/' + x.id + '.jpg', alt: '', loading: 'lazy' }),
       h('b', {}, x.name),
