@@ -1,0 +1,33 @@
+# 親父さんの録音・写真、動画素材（外に出さない）
+_voice_private/
+_動画素材/
+_確認画像/
+kabi/voice/
+*.m4a
+*.wav
+*.mp3
+*.mp4
+*.mov
+
+# 道具の実データ（話した内容が入る）
+studio/data/
+studio/_judge_data/
+studio/_test*/
+kabi_correct/snapshots/
+
+# 制作メモ（事前の構想・個人の話を含む）
+*.md
+!README.md
+!studio/kit/API.md
+!*/SOURCES.md
+_実験_自動生成/
+index.html
+all.html
+
+# 環境
+.claude/
+.env
+.env.*
+__pycache__/
+*.pyc
+.DS_Store

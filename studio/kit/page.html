@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/three@0.160.0/; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>{{TITLE}}</title>
+<style>
+:root{--ink:#f6f3ec;--mute:#d4d2cb;--em:#ffc25a;--night:#0f1216;--ask:#f2c230}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--night);color:var(--ink);font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",Meiryo,system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;object-fit:contain}
+#scroll{height:1100vh}
+#scrim{position:fixed;inset:0;pointer-events:none}
+.cap{position:fixed;left:clamp(20px,5vw,72px);top:50%;transform:translateY(-50%);width:min(42vw,580px);opacity:0;visibility:hidden;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.75),0 2px 14px rgba(0,0,0,.55)}
+.cap h2{margin:0 0 .55em;font-weight:800;font-size:clamp(28px,3.5vw,52px);line-height:1.32;letter-spacing:.01em;word-break:auto-phrase;text-wrap:balance}
+.cap p{margin:0 0 .9em;font-size:clamp(15px,1.3vw,19px);line-height:1.85;color:var(--mute);word-break:auto-phrase;text-wrap:pretty}
+.cap em{font-style:normal;color:var(--em)}
+.imgp{display:flex;gap:8px;align-items:baseline;margin:0 0 .75em;font-size:clamp(11.5px,1vw,13.5px);line-height:1.5;color:var(--mute);text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.imgp[hidden]{display:none}
+.imgp b{flex:none;padding:1px 8px;border-radius:3px;background:var(--em);color:#111;font-weight:700;text-shadow:none}
+.ask{display:block;margin-top:.4em;padding:8px 12px;border-left:5px solid var(--ask);background:rgba(0,0,0,.45);font-size:clamp(13px,1.05vw,15px);line-height:1.6;color:var(--ink);text-shadow:none}
+.ask b{display:block;color:var(--ask);font-weight:700}
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.lb{position:absolute;left:0;top:0;padding:2px 7px;border-radius:3px;background:rgba(10,12,16,.68);font-size:14px;font-weight:600;white-space:nowrap;color:#fff;opacity:0;will-change:transform}
+.lb i{position:absolute;top:50%;height:1px;width:22px;background:rgba(255,255,255,.8)}
+.lb i::before{content:"";position:absolute;top:-2.5px;width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 3px #000}
+.lb.r i{right:100%;margin-right:0}.lb.r i::before{left:-3px}
+.lb.l i{left:100%;margin-left:0}.lb.l i::before{right:-3px}
+#tag{position:fixed;left:clamp(20px,5vw,72px);top:18px;font-size:13px;color:var(--ink);text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#note{position:fixed;right:18px;top:18px;max-width:46vw;font-size:12px;color:var(--mute);background:rgba(0,0,0,.5);padding:5px 10px;border-radius:5px}
+#bar{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:3px;height:30vh;background:rgba(255,255,255,.16);border-radius:2px}
+#bar i{display:block;width:100%;height:0;background:var(--ink);border-radius:2px}
+#hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);font-size:13px;color:var(--mute);transition:opacity .3s;text-shadow:0 1px 4px #000}
+#err{display:none;position:fixed;inset:0;padding:30px;background:var(--night);line-height:1.8;z-index:9}
+#testMark{display:none;position:fixed;right:18px;top:58px;padding:4px 12px;background:#f2c230;color:#111;font-size:13px;font-weight:700;z-index:8;white-space:nowrap}
+body.test #testMark{display:block}
+@media (max-width:760px){#testMark{top:76px;right:14px;font-size:12px}}
+body.rec{overflow:hidden;background:#000}
+body.rec #scrim,body.rec #caps,body.rec #labels,body.rec #tag,body.rec #note,body.rec #bar,body.rec #hint,body.rec #testMark,body.rec canvas#c{visibility:hidden!important}
+#recView{display:none;position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+body.rec #recView{display:block}
+@media (max-width:760px),(max-aspect-ratio:1/1){
+ .cap{left:20px;right:20px;top:auto;bottom:24px;transform:none;width:auto}
+ .cap h2{font-size:clamp(24px,7vw,34px)}
+ .cap p{font-size:14.5px;line-height:1.75}
+ .ask{font-size:13px}
+ #bar{display:none}
+ #tag{top:12px;left:14px;font-size:11px}
+ #note{top:32px;left:14px;right:auto;max-width:calc(100vw - 28px);font-size:10.5px;padding:3px 8px}
+ #hint{bottom:6px}
+ .lb{font-size:12.5px}
+}
+</style>
+<script>
+window.__ERR=[];
+(function(){
+ function say(o){try{if(parent!==window)parent.postMessage(Object.assign({kit:'error'},o),'*');}catch(e){}}
+ addEventListener('error',function(e){var o={message:String(e.message||(e.target&&e.target.src?'読み込めませんでした: '+e.target.src:'不明なエラー')),line:e.lineno||0,col:e.colno||0};window.__ERR.push(o);say(o);},true);
+ addEventListener('unhandledrejection',function(e){var r=e.reason||{},o={message:String(r.message||r),line:0,col:0};window.__ERR.push(o);say(o);});
+})();
+</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<canvas id="recView" aria-hidden="true"></canvas>
+<div id="scrim"></div>
+<div id="labels"></div>
+<div id="tag"></div>
+<div id="note"></div>
+<div id="testMark">テスト（Claudeの返事は手書き）</div>
+<div id="bar"><i></i></div>
+<div id="caps"></div>
+<div id="hint">下へスクロール</div>
+<div id="scroll"></div>
+<div id="err">この図を表示できませんでした（お使いの端末で3D表示が使えないか、部品を読み込めませんでした）。</div>
+<script type="application/json" id="spec">{{SPEC}}</script>
+<script type="module">
+{{KIT}}
+</script>
+<script type="module">
+__KIT.run(function(K,window,document,globalThis,self,frames,parent,top,opener,location,navigator,localStorage,sessionStorage,indexedDB,fetch,XMLHttpRequest,WebSocket,EventSource,Worker,SharedWorker,importScripts,postMessage,open){return (function(){"use strict";
+{{CODE}}
+}).call(undefined);});
+</script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+{
+  "_memo": "親父さんの録音（2026-11-04）に合わせて書き直した。文字起こしは機械のままなので確認前。文字・数・色・声のファイルはコードを触らず変えられる。voice に音声ファイル名を入れると、その場面に再生ボタンが出る。",
+  "tag": "おそうじ工房　カビ取り（下書き・親父さん確認前）",
+  "note": "説明用の図です。胞子は見やすく大きく、光らせて描いています",
+  "chapters": [
+    {
+      "id": "intro",
+      "a": 0.0,
+      "b": 0.08,
+      "title": "この<em>黒カビ</em>、拭いたら終わりだと思いますか。",
+      "body": "部屋のすみに出てきた、黒いカビ。見えている所を拭けば、きれいになります。",
+      "voice": null
+    },
+    {
+      "id": "wipe",
+      "a": 0.095,
+      "b": 0.18,
+      "title": "まず、見えている<br>カビを落とす。",
+      "body": "カビ除去の工程です。カビは大概落ちますが、素材によっては色が残ることがあります。それは先にお客さんに話します。",
+      "voice": null
+    },
+    {
+      "id": "air",
+      "a": 0.195,
+      "b": 0.275,
+      "title": "きれいになった。<br>でも、<em>空気</em>は見えません。",
+      "body": "カビの胞子は、空気の中に浮いています。とても小さくて、目では見えません。光らせて描くと、こんな感じです。",
+      "voice": null
+    },
+    {
+      "id": "root",
+      "a": 0.29,
+      "b": 0.375,
+      "title": "湿った所に落ちると、また<em>根</em>を伸ばす。",
+      "body": "胞子が落ちて条件がそろうと、糸のような菌糸を伸ばします。これが広がって、また目に見えるカビになります。",
+      "voice": null
+    },
+    {
+      "id": "look",
+      "a": 0.39,
+      "b": 0.475,
+      "title": "立った目線では、<br>見えない所がある。",
+      "body": "かがんで見る。動かせる物は動かす。タンスや下駄箱の裏は、カビが多い場所です。",
+      "voice": "voice/v1.m4a"
+    },
+    {
+      "id": "spray",
+      "a": 0.49,
+      "b": 0.61,
+      "title": "次に、<span class=\"c\">薬剤を霧</span>にして<br>広げる。",
+      "body": "薬剤を、噴霧機で霧にして広げます。防護服とマスクをつけた作業です。",
+      "voice": "voice/v3.m4a"
+    },
+    {
+      "id": "wait",
+      "a": 0.625,
+      "b": 0.7,
+      "title": "そのまま、<br>1〜2時間おく。",
+      "body": "霧を出して終わりではありません。部屋を閉めたまま、しばらく待ちます。",
+      "voice": null
+    },
+    {
+      "id": "vent",
+      "a": 0.715,
+      "b": 0.78,
+      "title": "窓を開けて、<br>風を入れ替える。",
+      "body": "待ったあとは、窓を開けて空気を入れ替えます。",
+      "voice": null
+    },
+    {
+      "id": "moist",
+      "a": 0.795,
+      "b": 0.87,
+      "title": "ジメジメしたままだと、<br>また生える。",
+      "body": "カビの原因は、温度と湿気です。いくら取っても、湿気が残れば戻ります。だから、乾燥機をつけたり、除湿機を置いたりするように、お客さんに話しています。",
+      "voice": "voice/v4.m4a"
+    },
+    {
+      "id": "under",
+      "a": 0.885,
+      "b": 0.96,
+      "title": "誰も見ない、<br><span class=\"c\">床の下</span>。",
+      "body": "床下の湿気でカビが出た家では、点検口から潜って、這いながら薬剤を噴霧しました。",
+      "voice": "voice/v5.m4a"
+    },
+    {
+      "id": "quote",
+      "a": 0.972,
+      "b": 1.01,
+      "title": "「お客さんの目が見えない所も、きれいにする。」",
+      "body": "親父さんの言葉です（録音より・本人の使用許可あり）。",
+      "voice": "voice/v2.m4a",
+      "cta": true
+    }
+  ],
+  "spores": 5200,
+  "sporesPhone": 2400,
+  "mist": 900,
+  "mold": {
+    "grow": 0.97,
+    "returnGrow": 0.92,
+    "behindGrow": 0.95
+  },
+  "contact": "https://153161.jp/contact/",
+  "craft": {
+    "wait": {
+      "min": 1,
+      "max": 2
+    },
+    "order": [
+      "look",
+      "spray",
+      "moist",
+      "under"
+    ],
+    "visible": {
+      "clock": true,
+      "lamp": true,
+      "bed": true,
+      "rug": true,
+      "curtain": true,
+      "dehumidifier": true
+    },
+    "place": {
+      "dehumidifier": "under_window",
+      "bed": "by_wall",
+      "wardrobe": "small_gap"
+    },
+    "mold": {
+      "corner": {
+        "place": "ceiling_corner",
+        "amount": "normal"
+      },
+      "behind": {
+        "amount": "normal"
+      }
+    },
+    "tool": {
+      "wipe": "cloth",
+      "spray": "standard",
+      "dry": "dehumidifier"
+    }
+  },
+  "ui": {
+    "button": "ここは違う",
+    "count": "親父さんが直した回数",
+    "countUnit": "回",
+    "testLabel": "テスト（親父さんの履歴には残りません）",
+    "inputTitle": "どこが違いますか",
+    "sceneLabel": "いまの場面",
+    "tapHint": "3Dの違う所を指すと、場所も一緒に伝わります。",
+    "tapLabel": "指した場所",
+    "placeholder": "例）置き時間は3〜4時間です",
+    "speak": "話して入れる",
+    "speakStop": "聞いています（押すと止まる）",
+    "speakFail": "音声入力が使えませんでした。文字で入れてください。",
+    "send": "これで直してみる",
+    "close": "閉じる",
+    "waiting": "Claude が読んでいます",
+    "previewNote": "まだ確定していません。3Dは試しに直した形です。",
+    "before": "前",
+    "after": "後",
+    "ok": "これでいい",
+    "no": "違う",
+    "saved": "直しました。",
+    "undone": "直す前に戻しました。",
+    "cancelled": "取り消しました。元のままです。",
+    "again": "もう一度言う",
+    "cantTitle": "この直しは今はできない",
+    "cantNote": "メモに残しました。",
+    "checkTitle": "確認が要る",
+    "checkNote": "作品の文には入れず、ここで止めました。メモに残しました。",
+    "noChange": "直す所が見つかりませんでした。言い方を変えてもう一度お願いします。",
+    "noServer": "受付サーバーが動いていないので、直しを受け付けられません。kabi_correct/server.py を起動して、そのURLから開いてください。",
+    "historyTitle": "親父さんが直した記録",
+    "historyEmpty": "まだありません。",
+    "historyHidden": "（確認が要る言葉を含むので、ここには出しません）",
+    "undo": "最後の直しを戻す",
+    "withdrawn": "戻しました",
+    "places": {
+      "back_wall": "奥の壁",
+      "left_wall": "左の壁",
+      "ceiling": "天井",
+      "floor": "床",
+      "window": "窓",
+      "wardrobe": "タンス",
+      "bed": "ベッド",
+      "lamp": "電気スタンド",
+      "clock": "時計",
+      "dehumidifier": "除湿機",
+      "curtain": "カーテン",
+      "rug": "じゅうたん",
+      "worker": "防護服の人",
+      "crawler": "床下の人",
+      "under": "床下"
+    }
+  }
+}
