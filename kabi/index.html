@@ -680,10 +680,12 @@ function around(x0,x1,z0,z1,fn){fn(x0,x1,z0,HZ0);fn(x0,x1,HZ1,z1);fn(x0,HX0,HZ0,
 const sheetY=GY+.16;
 {// 地面と基礎
  const earth=uBox(FX1-FX0,.62,FZ1-FZ0,(FX0+FX1)/2,GY-.31,(FZ0+FZ1)/2,dirtM);earth.castShadow=false;
- uBox(FX1-FX0,1.3,.34,(FX0+FX1)/2,-.9,FZ0+.02,concM);uBox(.34,1.3,FZ1-FZ0,FX0+.02,-.9,(FZ0+FZ1)/2,concM);
+ // 基礎の下端は地面の上面で止める（地面に埋めると端面が地面の端面と重なる）
+ uBox(FX1-FX0,1.25,.34,(FX0+FX1)/2,-.875,FZ0+.02,concM);uBox(.34,1.25,FZ1-FZ0,FX0+.02,-.875,(FZ0+FZ1)/2,concM);
  // 床の裏：合板・断熱材（青）・根太
  around(FX0,FX1,FZ0,FZ1,(a,b,c,d)=>{uBox(b-a,.06,d-c,(a+b)/2,-.08,(c+d)/2,plyM);uBox(b-a,.13,d-c,(a+b)/2,-.175,(c+d)/2,foamM);});
- const joist=(z)=>{const seg=(a,b)=>{if(b-a>.02)uBox(b-a,.16,.09,(a+b)/2,-.19,z,beamM);};if(z>HZ0-.05&&z<HZ1+.05){seg(FX0,HX0-.05);seg(HX1+.05,FX1);}else seg(FX0,FX1);};
+ // 根太の両端は断熱材の端面より引っ込める（同じ面に揃うと断面で茶色がチラつく）
+ const JX0=FX0+.03,JX1=FX1-.03,joist=(z)=>{const seg=(a,b)=>{if(b-a>.02)uBox(b-a,.16,.09,(a+b)/2,-.19,z,beamM);};if(z>HZ0-.05&&z<HZ1+.05){seg(JX0,HX0-.05);seg(HX1+.05,JX1);}else seg(JX0,JX1);};
  for(let z=FZ0+.25;z<FZ1;z+=.62)joist(z);
  // 大引と束（古い木。下には束石）
  for(const z of[-2.7,-1.35,0,1.35,2.2]){const nr=true;if(nr){uBox(1.05-FX0,.22,.2,(FX0+1.05)/2,-.38,z,beamM);addBox(FX1-1.05,.22,.2,(1.05+FX1)/2,-.38,z,beamM,frontOnly);}else uBox(FX1-FX0,.22,.2,(FX0+FX1)/2,-.38,z,beamM);for(const x of[-2.6,-.45,3.3]){const hh=-.49-(GY+.2),fr=nr&&x>3,par=fr?frontOnly:under;addBox(.17,hh,.17,x+rnd(-.05,.05),GY+.2+hh/2,z,postM,par);const bl=new THREE.Mesh(new THREE.BoxGeometry(.34,.24,.34),concM);bl.position.set(x,GY+.1,z);bl.rotation.y=rnd(.3);bl.castShadow=bl.receiveShadow=true;par.add(bl);}}}
