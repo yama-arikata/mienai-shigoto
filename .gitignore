@@ -18,6 +18,7 @@ kabi_correct/snapshots/
 # 制作メモ（事前の構想・個人の話を含む）
 *.md
 !README.md
+!BUILD_LOG.md
 !studio/kit/API.md
 !*/SOURCES.md
 _実験_自動生成/
