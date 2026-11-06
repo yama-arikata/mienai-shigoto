@@ -119,13 +119,14 @@ function route() {
   }
   if (P.stage === 'ready') { setScreen('result', screenResult, true); snap(100); updateResult(); }
 }
+let workLost = false; // 審査員モードで、再起動のあと作りかけが見つからなかった
 async function load(id) {
   try {
     P = await get('/api/project?id=' + encodeURIComponent(id));
     if (serverLost) { serverLost = false; }
     route();
   } catch (e) {
-    if (e.status === 404) { history.replaceState(null, '', '/'); P = null; screen = ''; showHome(); return; }
+    if (e.status === 404) { workLost = !!STATE.judge; history.replaceState(null, '', '/'); P = null; screen = ''; showHome(); return; }
     if (!serverLost) { serverLost = true; toast('サーバーにつながりません。起動しているか確かめてください。'); }
   }
   clearTimeout(timer);
@@ -134,6 +135,167 @@ async function load(id) {
 function openProject(id) {
   history.pushState(null, '', '/?id=' + id);
   load(id);
+}
+
+
+// ---------- 土壁の断面（CSSの3Dと手描きの質感。外から読み込まない）----------
+// 層の順と言葉は sakan/SOURCES.md で確かめた見本に合わせる。これは左官の例で、道具が作った物ではない
+const WALL_W = 250, WALL_H = 320;
+const WALL_LAYERS = [ // 奥から手前へ
+  { key: 'take', thick: 14, z: 0, gap: 0, side: '#8f7c3f', top: '#b5a35f', label: '竹を組んで、縄でしばる' },
+  { key: 'ara', thick: 30, z: 10, gap: 62, side: '#553d27', top: '#8d6c4b', label: '荒壁の土。竹にすりこむ' },
+  { key: 'naka', thick: 18, z: 40, gap: 124, side: '#8c7049', top: '#c7a97f', label: '中塗りの土で平らに' },
+  { key: 'shikkui', thick: 5, z: 58, gap: 186, side: '#b5b2a6', top: '#f6f4ee', label: '見えるのは、ここだけ' },
+];
+function wallRandom(seed) { let x = seed; return () => (x = (x * 16807) % 2147483647) / 2147483647; }
+function wallCanvas(paint) {
+  const c = document.createElement('canvas');
+  c.width = WALL_W * 2; c.height = WALL_H * 2;
+  const g = c.getContext('2d');
+  g.scale(2, 2);
+  paint(g);
+  return c;
+}
+function speckle(g, rnd, n, colors, size) {
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = colors[Math.floor(rnd() * colors.length)];
+    const r = size * (.4 + rnd());
+    g.fillRect(rnd() * WALL_W, rnd() * WALL_H, r, r);
+  }
+}
+function paintPole(g, x, y, len, w, vertical) {
+  const grad = vertical ? g.createLinearGradient(x, 0, x + w, 0) : g.createLinearGradient(0, y, 0, y + w);
+  grad.addColorStop(0, '#8f7c3f'); grad.addColorStop(.35, '#dcc97f'); grad.addColorStop(1, '#7c6a34');
+  g.fillStyle = grad;
+  if (vertical) g.fillRect(x, y, w, len); else g.fillRect(x, y, len, w);
+  g.fillStyle = 'rgba(60,46,18,.65)';
+  for (let d = 34; d < len; d += 92) { if (vertical) g.fillRect(x, y + d, w, 2); else g.fillRect(x + d, y, 2, w); }
+}
+const WALL_PAINT = {
+  shikkui(g) {
+    g.fillStyle = '#eceae3'; g.fillRect(0, 0, WALL_W, WALL_H);
+    const rnd = wallRandom(11);
+    g.lineCap = 'round';
+    for (let i = 0; i < 90; i++) { // こての跡
+      g.strokeStyle = `rgba(92,86,70,${.015 + rnd() * .035})`;
+      g.lineWidth = 8 + rnd() * 22;
+      const x = rnd() * WALL_W, y = rnd() * WALL_H;
+      g.beginPath(); g.moveTo(x - 50, y + 8); g.quadraticCurveTo(x, y - 12, x + 50, y + 6); g.stroke();
+    }
+    speckle(g, rnd, 500, ['rgba(120,112,92,.10)', 'rgba(255,255,255,.35)'], 1.2);
+  },
+  naka(g) {
+    g.fillStyle = '#b7986e'; g.fillRect(0, 0, WALL_W, WALL_H);
+    speckle(g, wallRandom(23), 5200, ['rgba(92,68,38,.30)', 'rgba(232,212,170,.30)', 'rgba(60,44,24,.18)'], 1.3);
+  },
+  ara(g) {
+    g.fillStyle = '#7d5e40'; g.fillRect(0, 0, WALL_W, WALL_H);
+    const rnd = wallRandom(37);
+    speckle(g, rnd, 6200, ['rgba(40,26,14,.36)', 'rgba(170,132,92,.26)'], 1.9);
+    g.lineCap = 'round';
+    for (let i = 0; i < 230; i++) { // わら
+      g.strokeStyle = `rgba(228,202,132,${.35 + rnd() * .4})`;
+      g.lineWidth = .7 + rnd() * .8;
+      const x = rnd() * WALL_W, y = rnd() * WALL_H, a = rnd() * Math.PI * 2, l = 7 + rnd() * 17;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+  },
+  takeV(g) { for (let x = 16; x < WALL_W - 8; x += 36) paintPole(g, x, 0, WALL_H, 9, true); },
+  takeH(g) {
+    const rnd = wallRandom(51);
+    for (let y = 16; y < WALL_H - 8; y += 36) paintPole(g, 0, y, WALL_W, 8, false);
+    g.strokeStyle = '#e4d4ae'; g.lineWidth = 1.3;
+    for (let y = 16; y < WALL_H - 8; y += 36) for (let x = 16; x < WALL_W - 8; x += 36) { // 縄
+      if (rnd() < .16) continue;
+      g.beginPath(); g.moveTo(x - 1, y - 2); g.lineTo(x + 10, y + 10); g.moveTo(x + 10, y - 2); g.lineTo(x - 1, y + 10); g.stroke();
+    }
+  },
+};
+function makeWall(host, { labels = false } = {}) {
+  const scene = h('div', { class: 'wallScene' });
+  const stage = h('div', { class: 'wallStage', 'aria-hidden': 'true' }, scene);
+  host.append(stage);
+  const layers = WALL_LAYERS.map(l => {
+    const slab = h('div', { class: 'wallSlab' });
+    const face = (cls, css) => { const f = h('div', { class: cls }); f.style.cssText = css; slab.append(f); return f; };
+    if (l.key === 'take') {
+      for (const [k, z] of [['takeV', 0], ['takeH', 9]]) {
+        const c = wallCanvas(WALL_PAINT[k]);
+        c.className = 'wallFace';
+        c.style.transform = `translateZ(${z}px)`;
+        slab.append(c);
+      }
+    } else {
+      const c = wallCanvas(WALL_PAINT[l.key]);
+      c.className = 'wallFace';
+      c.style.transform = `translateZ(${l.thick}px)`;
+      slab.append(c);
+      face('wallFace', `width:${l.thick}px;height:${WALL_H}px;background:${l.side};transform-origin:0 0;transform:rotateY(-90deg)`);
+      face('wallFace', `width:${WALL_W}px;height:${l.thick}px;background:${l.top};transform-origin:0 0;transform:rotateX(90deg)`);
+    }
+    const dot = h('i', { class: 'wallDot' });
+    slab.append(dot);
+    scene.append(slab);
+    const tag = labels ? h('div', { class: 'wallLabel ' + l.key }, l.label) : null;
+    if (tag) stage.append(tag);
+    return { ...l, slab, dot, tag };
+  });
+  let t = 0, shown = layers.length;
+  function place() {
+    for (const [i, l] of layers.entries()) {
+      const off = i >= shown ? 70 : 0;
+      l.slab.style.transform = `translateZ(${l.z + l.gap * t + off - 110}px)`;
+      l.slab.classList.toggle('off', i >= shown);
+    }
+  }
+  function relabel() {
+    if (!labels) return;
+    const b = stage.getBoundingClientRect();
+    for (const [i, l] of layers.entries()) {
+      const r = l.dot.getBoundingClientRect();
+      const rowY = 6 + i * 24; // 奥の層ほど上の段に置いて、名前どうしを重ねない
+      l.tag.style.transform = `translate(${Math.round(r.left - b.left)}px,${rowY}px)`;
+      l.tag.style.height = `${Math.max(20, Math.round(r.top - b.top - rowY))}px`;
+      const front = i === layers.length - 1;
+      l.tag.style.opacity = front ? 1 : Math.max(0, Math.min(1, (t - .3 - (2 - i) * .14) / .16));
+    }
+  }
+  function fit() {
+    const w = stage.clientWidth, hh = stage.clientHeight;
+    if (!w || !hh) return;
+    const need = labels ? [470, 560] : [400, 440];
+    scene.style.setProperty('--wall-scale', Math.min(w / need[0], hh / need[1], labels ? 1.5 : 1).toFixed(3));
+    relabel();
+  }
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(stage);
+  place(); fit();
+  return {
+    stage,
+    set(v) { t = v; place(); relabel(); },
+    build(n) { if (n === shown) return; shown = n; place(); },
+    get t() { return t; },
+    fit,
+  };
+}
+// はじめの画面だけ、白い壁が一度だけ開く。つまみで戻せる
+function peelHero(host) {
+  const wall = makeWall(host, { labels: true });
+  const range = h('input', { type: 'range', min: 0, max: 100, value: 0, class: 'peel', 'aria-label': '壁をはがす量' });
+  const hint = h('div', { class: 'peelRow' }, h('label', {}, 'つまみを動かすと、壁がはがれます'), range,
+    h('div', { class: 'peelNote' }, '絵は左官の土壁の例です。'));
+  host.append(hint);
+  let stop = false;
+  range.addEventListener('input', () => { stop = true; wall.set(range.value / 100); });
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) { wall.set(1); range.value = 100; return; }
+  const t0 = performance.now() + 900, dur = 2400;
+  const step = now => {
+    if (stop || !wall.stage.isConnected) return;
+    const x = Math.max(0, Math.min(1, (now - t0) / dur));
+    const e = x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    wall.set(e); range.value = Math.round(e * 100);
+    if (x < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 // ---------- はじめ ----------
@@ -146,16 +308,21 @@ async function showHome() {
   screen = '';
   setScreen('home', () => {
     const blocked = !STATE.test && !STATE.key;
-    put(view, 
-      h('h1', {}, 'お客さんに見えない仕事を、', h('br', {}), '3Dのページにします。'),
-      h('p', { class: 'lead' }, 'いくつか質問に答えるだけです。文字でも声でも答えられます。'),
-      h('p', { class: 'mute' }, '言っていないことは書きません。分からない所は「ここは職人に確認」と出します。'),
+    view.className = 'home';
+    const art = h('div', { class: 'heroArt' });
+    const lost = workLost && errBox('サーバーが再起動して、作りかけが消えました。すみません、もう一度はじめてください。');
+    workLost = false;
+    put(view, lost, h('div', { class: 'hero' }, art, h('div', { class: 'heroText' },
+      h('h1', {}, 'お客さんが見るのは、', h('br', {}), 'いちばん上の一枚だけ。'),
+      h('p', { class: 'lead' }, 'その奥でしている仕事を、話すだけで3Dのページにします。口で説明していた手間を、お客さんに見せられます。'),
       blocked && errBox(STATE.no_key_message),
       h('div', { class: 'row' }, h('button', { class: 'main', disabled: blocked, onclick: () => showIntake(0) }, 'はじめる')),
+      h('p', { class: 'mute heroNote' }, 'いくつか質問に答えるだけです。文字でも声でも答えられます。言っていないことは書きません。分からない所は「ここは職人に確認」と出します。'))),
       list.length ? h('div', {}, h('h2', { style: 'margin-top:44px' }, '前に作ったもの'),
         h('ul', { class: 'list' }, list.map(x => h('li', {}, h('a', { href: '/?id=' + x.id, onclick: e => { e.preventDefault(); openProject(x.id); } },
           h('span', {}, x.title || '（名前なし）', ' ', h('span', { class: 'mute small' }, x.job)),
           h('span', { class: 'mute small' }, stageWord(x.stage))))))) : null);
+    peelHero(art);
   });
 }
 const stageWord = s => ({ interview: '質問の途中', review: '答えを確かめる所', building: '作っている途中', ready: 'できたページあり', failed: '止まっている' }[s] || s);
@@ -265,10 +432,15 @@ function screenReview() {
 let prog = {};
 function screenProgress() {
   prog = { title: h('h1', {}), kicker: h('div', { class: 'kicker' }), steps: h('ol', { class: 'steps' }), tick: h('div', { class: 'ticker' }), live: h('div', { class: 'livebox' }), log: h('ul', { class: 'log' }), act: h('div', { style: 'margin-bottom:26px' }), n: 0 };
-  put(view, prog.kicker, prog.title, prog.tick, prog.steps, prog.live, prog.act,
+  const side = h('div', { class: 'progWall' });
+  put(view, h('div', { class: 'progGrid' }, side, h('div', { class: 'progMain' }, prog.kicker, prog.title, prog.tick, prog.steps, prog.live)), prog.act,
     h('h2', {}, '見つけた問題と、直した所'), prog.log,
     h('p', { class: 'notice' }, 'この確かめは、見た目と動きだけを見ています。仕事の中身が合っているかは、できたあとで、あなたの目で確かめてください。'),
     h('p', { class: 'notice' }, 'この画面は閉じても大丈夫です。作るのは裏で続きます。ページが動くかを確かめる所だけは、この画面を開いている間に進みます。'));
+  prog.wall = makeWall(side);
+  side.append(h('div', { class: 'peelNote' }, '壁の絵は、進み具合の目印です。'));
+  prog.wall.set(.3);
+  prog.wall.build(1);
 }
 function stepsOf(j) {
   const out = [];
@@ -333,6 +505,7 @@ function updateProgress() {
     const total = 1 + j.max_rounds * 2 + 1;
     const doneSteps = stepsOf(j).filter(s => s.state === 'done').length;
     snap(58 + Math.min(40, 40 * doneSteps / total));
+    if (prog.wall) prog.wall.build(Math.min(4, 1 + Math.round(3 * Math.min(1, doneSteps / total))));
   }
   // ブラウザが要る手順
   if (j.stage === 'check' && j.check) runBuildCheck(j.check);
