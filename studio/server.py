@@ -1199,12 +1199,15 @@ def main():
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--test", action="store_true", help="Claudeの返事を手書きにする。データは終わると消える")
     ap.add_argument("--keep-test", action="store_true", help="試験データを消さない（再開の試験用）")
+    ap.add_argument("--bind", default="127.0.0.1", help="待ち受ける住所。127.0.0.1 以外は審査員モードのときだけ使える")
     ap.add_argument("--judge", action="store_true", help="審査員モード。合言葉は環境変数 STUDIO_JUDGE_CODE から読む")
     ap.add_argument("--judge-host", action="append", default=[], help="公開するホスト名（https で来るもの）。複数回書ける")
     ap.add_argument("--judge-max-calls", type=int, default=int(os.environ.get("STUDIO_JUDGE_MAX_CALLS") or 120), help="Claude を呼ぶ回数の合計の上限")
     ap.add_argument("--judge-parallel", type=int, default=int(os.environ.get("STUDIO_JUDGE_PARALLEL") or 2), help="Claude を同時に呼ぶ数の上限")
     args = ap.parse_args()
     code = os.environ.pop("STUDIO_JUDGE_CODE", "")
+    if args.bind != "127.0.0.1" and not (args.judge and args.judge_host):
+        ap.error("--bind で外から受けるのは、--judge と --judge-host を付けたときだけです")
     if args.judge_host and not args.judge:
         ap.error("--judge-host は --judge と一緒に使います")
     if args.judge:
@@ -1243,7 +1246,7 @@ def main():
     signal.signal(signal.SIGTERM, cleanup)
     signal.signal(signal.SIGINT, cleanup)
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    httpd = ThreadingHTTPServer((args.bind, args.port), Handler)
     httpd.daemon_threads = True
     mode = "試験モード（Claudeの返事は手書き・データは終わると消える）" if args.test else ("本番（Claudeにつながります）" if claude.has_key() else "本番・APIキーなし（画面で止まります）")
     print(f"http://127.0.0.1:{args.port}/  {mode}  確かめて直す周回の上限={engine.max_rounds}", flush=True)
