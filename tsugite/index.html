@@ -359,7 +359,7 @@ function apply(p,t){
  if(portrait){const d2=cp.clone().sub(cl);camera.position.copy(cl).add(d2.multiplyScalar(1.34));}else camera.position.copy(cp);
  camera.position.y+=shake;
  camera.lookAt(cl);
- for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ for(const c of caps){const o=(c.a<=0?1:ss(c.a-.012,c.a+.008,p))*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
  hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
 }
 const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -423,7 +423,7 @@ function apply(p,now){
   q.d.style.opacity=Math.min(1,show);q.trk.style.visibility=(p>.48&&p<.74)?'visible':'hidden';
   if(show>.01){tv.set(q.v.g.position.x,5.15,0);tv.project(camera);q.d.style.transform=`translate(${(tv.x*.5+.5)*W}px,${(-tv.y*.5+.5)*H-34}px)`;q.bar.style.width=(fruitAt(q.T,t)/maxFruit*100)+'%';}}
  if(play){barN.style.width=(fruitAt(TN,userT)/maxFruit*100)+'%';barU.style.width=(fruitAt(TU,userT)/maxFruit*100)+'%';}
- for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ for(const c of caps){const o=(c.a<=0?1:ss(c.a-.012,c.a+.008,p))*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
  hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
 }
 // ── 触るところ：枝を切る→計算し直す→5年すすむ

@@ -297,25 +297,73 @@ function makeWall(host, { labels = false, names = null } = {}) {
     fit,
   };
 }
-// はじめの画面だけ、白い壁が一度だけ開く。つまみで戻せる
-function peelHero(host) {
-  const wall = makeWall(host, { labels: true });
-  const range = h('input', { type: 'range', min: 0, max: 100, value: 0, class: 'peel', 'aria-label': '壁をはがす量' });
-  const hint = h('div', { class: 'peelRow' }, h('label', {}, 'つまみを動かすと、壁がはがれます'), range,
-    h('div', { class: 'peelNote' }, '絵は左官の土壁の例です。'));
-  host.append(hint);
+// はじめの画面：津軽塗の「模様」と「奥の仕事」をつまみで見比べる
+const SAMPLE_NOTE = '見本。公開資料から作った例。職人さんの確認はこれから';
+const SHELF = [
+  { id: 'sakan', name: '左官の土壁' },
+  { id: 'tsugite', name: '柱の継ぎ手' },
+  { id: 'ringo', name: 'りんごのせん定' },
+  { id: 'rousui', name: '水もれ調査' },
+];
+const SAMPLE_NAMES = { tsugaru: '津軽塗', ...Object.fromEntries(SHELF.map(x => [x.id, x.name])) };
+function openSample(id) { history.pushState(null, '', '/?mihon=' + id); showSample(id); }
+function sampleLink(id, attrs, ...kids) {
+  return h('a', { href: '/?mihon=' + id, ...attrs, onclick: e => { e.preventDefault(); openSample(id); } }, ...kids);
+}
+function moyouStage() {
+  const stage = h('div', { class: 'moyouStage' },
+    h('img', { class: 'moyouPic', src: '/home/tsugaru_moyou.jpg', alt: '津軽塗の模様が出た丸盆と椀（見本の絵）' }),
+    h('img', { class: 'moyouPic oku', src: '/home/tsugaru_oku.jpg', alt: '同じ塗りの断面。色の層が重なっている（見本の絵）' }),
+    h('i', { class: 'moyouLine' }),
+    h('div', { class: 'moyouTag' }, 'お客さんが見る模様'),
+    h('div', { class: 'moyouTag right' }, 'その奥の仕事'));
+  const range = h('input', { type: 'range', min: 0, max: 100, value: 50, class: 'peel', 'aria-label': '模様と奥の仕事を見比べる' });
+  const set = v => { stage.style.setProperty('--v', v + '%'); range.value = v; };
   let stop = false;
-  range.addEventListener('input', () => { stop = true; wall.set(range.value / 100); });
-  if (matchMedia('(prefers-reduced-motion:reduce)').matches) { wall.set(1); range.value = 100; return; }
-  const t0 = performance.now() + 900, dur = 2400;
-  const step = now => {
-    if (stop || !wall.stage.isConnected) return;
-    const x = Math.max(0, Math.min(1, (now - t0) / dur));
-    const e = x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    wall.set(e); range.value = Math.round(e * 100);
-    if (x < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+  range.addEventListener('input', () => { stop = true; set(+range.value); });
+  // 絵の上を指でなぞっても動く
+  const fromX = e => { const r = stage.getBoundingClientRect(); set(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100)); };
+  stage.addEventListener('pointerdown', e => { stop = true; stage.setPointerCapture(e.pointerId); fromX(e); });
+  stage.addEventListener('pointermove', e => { if (stage.hasPointerCapture(e.pointerId)) fromX(e); });
+  set(50);
+  // 一度だけ、動くものだと分かるように小さく揺れる
+  if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+    const t0 = performance.now() + 1000, dur = 1800;
+    const step = now => {
+      if (stop || !stage.isConnected) return;
+      const x = (now - t0) / dur;
+      if (x >= 1) return set(50);
+      if (x > 0) set(Math.round(50 + Math.sin(x * Math.PI * 2) * 16));
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  return h('div', { class: 'moyou' }, stage,
+    h('div', { class: 'moyouBar' }, h('span', {}, '模様'), range, h('span', {}, '奥の仕事')),
+    h('p', { class: 'sampleNote' }, '津軽塗の', SAMPLE_NOTE, '。器の形と色は、説明のために描いた絵です。', sampleLink('tsugaru', { class: 'sampleOpen' }, '3Dで開いて見る')));
+}
+function shelf() {
+  return h('section', { class: 'shelf' },
+    h('h2', {}, 'ほかの仕事の見本'),
+    h('p', { class: 'mute small' }, 'どれも人の手を入れて作った見本です。道具が作るページと同じ見た目になるとは限りません。'),
+    h('div', { class: 'shelfRow' }, SHELF.map(x => sampleLink(x.id, { class: 'shelfItem' },
+      h('img', { src: '/home/' + x.id + '.jpg', alt: '', loading: 'lazy' }),
+      h('b', {}, x.name),
+      h('span', { class: 'shelfNote' }, SAMPLE_NOTE)))));
+}
+// 見本は枠の中で開く。「もどる」でいつでもはじめの画面へ
+function showSample(id) {
+  if (!SAMPLE_NAMES[id]) { history.replaceState(null, '', '/'); return showHome(); }
+  clearTimeout(timer);
+  P = null;
+  screen = '';
+  setScreen('mihon' + id, () => {
+    view.className = 'sample';
+    put(view, h('div', { class: 'sampleTop' },
+      h('button', { class: 'sampleBack', onclick: () => { history.pushState(null, '', '/'); screen = ''; showHome(); } }, '← もどる'),
+      h('div', { class: 'sampleLabel' }, h('b', {}, SAMPLE_NAMES[id]), ' ', SAMPLE_NOTE)),
+      h('iframe', { class: 'sampleFrame', src: '/mihon/' + id + '/', title: SAMPLE_NAMES[id] + 'の見本' }));
+  });
 }
 
 // ---------- はじめ ----------
@@ -329,20 +377,21 @@ async function showHome() {
   setScreen('home', () => {
     const blocked = !STATE.test && !STATE.key;
     view.className = 'home';
-    const art = h('div', { class: 'heroArt' });
     const lost = workLost && errBox('サーバーが再起動して、作りかけが消えました。すみません、もう一度はじめてください。');
     workLost = false;
-    put(view, lost, h('div', { class: 'hero' }, art, h('div', { class: 'heroText' },
-      h('h1', {}, 'お客さんが見るのは、', h('br', {}), 'いちばん上の一枚だけ。'),
-      h('p', { class: 'lead' }, 'その奥でしている仕事を、話すだけで3Dのページにします。口で説明していた手間を、お客さんに見せられます。'),
-      blocked && errBox(STATE.no_key_message),
-      h('div', { class: 'row' }, h('button', { class: 'main', disabled: blocked, onclick: () => showIntake(0) }, 'はじめる')),
-      h('p', { class: 'mute heroNote' }, 'いくつか質問に答えるだけです。文字でも声でも答えられます。言っていないことは書きません。分からない所は「ここは職人に確認」と出します。'))),
+    put(view, lost, moyouStage(),
+      h('div', { class: 'homeGo' },
+        h('div', {},
+          h('h1', {}, h('span', {}, '見えない手間を、'), h('span', {}, '見える形に。')),
+          h('p', { class: 'lead' }, 'いくつか質問に答えるだけで、あなたの仕事の奥を3Dのページにします。'),
+          h('p', { class: 'mute small' }, '文字でも声でも答えられます。言っていないことは書きません。分からない所は「ここは職人に確認」と出します。')),
+        h('div', { class: 'homeBtn' }, blocked && errBox(STATE.no_key_message),
+          h('button', { class: 'main', disabled: blocked, onclick: () => showIntake(0) }, 'はじめる'))),
+      shelf(),
       list.length ? h('div', {}, h('h2', { style: 'margin-top:44px' }, '前に作ったもの'),
         h('ul', { class: 'list' }, list.map(x => h('li', {}, h('a', { href: '/?id=' + x.id, onclick: e => { e.preventDefault(); openProject(x.id); } },
           h('span', {}, x.title || '（名前なし）', ' ', h('span', { class: 'mute small' }, x.job)),
           h('span', { class: 'mute small' }, stageWord(x.stage))))))) : null);
-    peelHero(art);
   });
 }
 const stageWord = s => ({ interview: '質問の途中', review: '答えを確かめる所', building: '作っている途中', ready: 'できたページあり', failed: '止まっている' }[s] || s);
@@ -822,10 +871,10 @@ function openCompare(beforeUrl, afterUrl) {
   const after = h('img', { src: afterUrl, alt: '直したあとの画面', class: 'cmpImg' });
   const line = h('i', { class: 'cmpLine' });
   const marks = h('div', { class: 'cmpMarks' });
-  const tagB = h('div', { class: 'cmpTag right' }, '直す前'), tagA = h('div', { class: 'cmpTag left' }, '直したあと');
+  const tagB = h('div', { class: 'cmpTag left' }, '直す前'), tagA = h('div', { class: 'cmpTag right' }, '直したあと');
   const box = h('div', { class: 'cmpBox' }, before, after, marks, line, tagA, tagB);
   const stage = h('div', { class: 'cmpStage' }, box);
-  const range = h('input', { type: 'range', min: 0, max: 100, value: 0, class: 'peel', 'aria-label': '直す前と直したあとを見比べる' });
+  const range = h('input', { type: 'range', min: 0, max: 100, value: 100, class: 'peel', 'aria-label': '線を動かして、直す前（左）と直したあと（右）を見比べる' });
   const toB = h('button', { class: 'cmpBtn', onclick: () => glide(0) }, '直す前');
   const toA = h('button', { class: 'cmpBtn', onclick: () => glide(100) }, '直したあと');
   const bar = h('div', { class: 'cmpBar' }, toB, range, toA);
@@ -833,11 +882,13 @@ function openCompare(beforeUrl, afterUrl) {
   res.wrap.classList.add('cmp');
   res.rail.el.after(bar);
   if (res.wrap.getBoundingClientRect().top < 0) res.wrap.scrollIntoView({ block: 'start' }); // スマホで下にいても、まず絵を見せる
-  let anim = 0, closed = false;
+  let anim = 0, closed = false, cur = 0;
+  // cur は「直したあと」が見えている割合。線より左が直す前、右が直したあと。つまみは線と同じ位置にある
   const set = v => {
-    range.value = v;
-    after.style.clipPath = `inset(0 ${100 - v}% 0 0)`;
-    line.style.left = v + '%';
+    cur = v;
+    range.value = 100 - v;
+    after.style.clipPath = `inset(0 0 0 ${100 - v}%)`;
+    line.style.left = (100 - v) + '%';
     line.style.opacity = v > 0 && v < 100 ? 1 : 0;
     tagA.style.opacity = v > 8 ? 1 : 0;
     tagB.style.opacity = v < 92 ? 1 : 0;
@@ -847,7 +898,7 @@ function openCompare(beforeUrl, afterUrl) {
   function glide(to, ms = 450, then) {
     cancelAnimationFrame(anim);
     if (matchMedia('(prefers-reduced-motion:reduce)').matches) { set(to); if (then) then(); return; }
-    const from = +range.value, t0 = performance.now();
+    const from = cur, t0 = performance.now();
     const step = now => {
       if (closed) return;
       const x = Math.min(1, (now - t0) / ms), e = x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
@@ -856,7 +907,7 @@ function openCompare(beforeUrl, afterUrl) {
     };
     anim = requestAnimationFrame(step);
   }
-  range.addEventListener('input', () => { cancelAnimationFrame(anim); set(+range.value); });
+  range.addEventListener('input', () => { cancelAnimationFrame(anim); set(100 - range.value); });
   const fit = () => {
     const nw = before.naturalWidth, nh = before.naturalHeight;
     if (!nw || closed) return;
@@ -879,7 +930,7 @@ function openCompare(beforeUrl, afterUrl) {
       return m;
     }));
     if (res.cmpNote) res.cmpNote.textContent = rects.length ? '黄色の枠が、絵の変わった所です。つまみを動かすと見比べられます。' : '変わった所を枠で示せませんでした。つまみを動かして見比べてください。';
-    setTimeout(() => { if (!closed && +range.value === 0) glide(100, 1500, () => marks.classList.add('on')); else marks.classList.add('on'); }, 700);
+    setTimeout(() => { if (!closed && cur === 0) glide(100, 1500, () => marks.classList.add('on')); else marks.classList.add('on'); }, 700);
   };
   for (const im of [before, after]) { if (im.complete && im.naturalWidth) onload(); else im.addEventListener('load', onload); }
   return { close() {
@@ -1124,10 +1175,10 @@ async function runFixCheck(chk) {
   catch (e) { put(view, errBox('サーバーにつながりません。')); return; }
   if (STATE.test) $('#testBadge').hidden = false;
   const boot = () => {
-    const id = new URLSearchParams(location.search).get('id');
+    const q = new URLSearchParams(location.search), id = q.get('id'), mihon = q.get('mihon');
     screen = '';
     res = {};
-    if (id) load(id); else showHome();
+    if (mihon) showSample(mihon); else if (id) load(id); else showHome();
   };
   addEventListener('popstate', boot);
   boot();

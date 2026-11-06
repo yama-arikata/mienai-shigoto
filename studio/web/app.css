@@ -252,3 +252,54 @@ main.build{max-width:1320px;margin:0 auto;padding:14px 26px 60px}
  button.big{min-height:60px;font-size:20px}
 }
 @media (prefers-reduced-motion:reduce){.fuda li{animation:none}.wallFace,.wallEdge{transition:none}}
+
+/* はじめの画面：上に津軽塗のつまみ、下に見本棚 */
+.moyouStage{--v:50%;position:relative;overflow:hidden;height:min(46vh,480px);min-height:280px;background:#0b0807;cursor:ew-resize;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.moyouPic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 52%;display:block;pointer-events:none}
+.moyouPic.oku{clip-path:inset(0 0 0 var(--v));object-position:50% 24%}
+.moyouLine{position:absolute;top:0;bottom:0;left:var(--v);width:3px;margin-left:-1.5px;background:var(--tape);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.moyouTag{position:absolute;top:14px;left:14px;background:rgba(6,12,20,.86);color:#fff;font-weight:800;font-size:18px;line-height:1.5;padding:4px 12px}
+.moyouTag.right{left:auto;right:14px;color:var(--tape)}
+.moyouBar{display:grid;grid-template-columns:auto minmax(100px,1fr) auto;gap:14px;align-items:center;margin-top:6px;font-weight:800;font-size:17px}
+.sampleNote{font-size:15px;line-height:1.6;color:var(--mute);margin:4px 0 0}
+.sampleOpen{margin-left:.6em;font-weight:700;white-space:nowrap}
+.homeGo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px 44px;align-items:center;margin-top:26px}
+.homeGo h1{margin-bottom:10px}
+.homeGo h1 span{display:inline-block}
+.homeGo .lead{margin-bottom:6px}
+.homeGo .small{margin:0}
+.homeBtn button.main{min-height:88px;min-width:280px;font-size:28px;padding:0 48px}
+.shelf{margin-top:40px}
+.shelf h2{margin-bottom:2px}
+.shelfRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:12px}
+.shelfItem{display:flex;flex-direction:column;color:var(--ink);text-decoration:none;background:var(--well);border:1px solid var(--ai3)}
+.shelfItem:hover,.shelfItem:focus-visible{border-color:var(--tape)}
+.shelfItem img{display:block;width:100%;aspect-ratio:8/5;object-fit:cover}
+.shelfItem b{font-size:19px;line-height:1.4;padding:10px 12px 0}
+.shelfNote{font-size:14px;line-height:1.5;color:var(--mute);padding:2px 12px 12px}
+main.sample{position:fixed;inset:0;z-index:20;max-width:none;margin:0;padding:0;display:flex;flex-direction:column;background:#0b0807}
+.sampleTop{display:flex;align-items:center;gap:14px;padding:8px 12px;background:var(--ai)}
+button.sampleBack{flex:none;min-height:56px;font-size:19px;padding:0 20px;white-space:nowrap}
+.sampleLabel{font-size:15px;line-height:1.45;color:var(--ink);word-break:auto-phrase}
+.sampleFrame{flex:1;min-height:0;width:100%;border:0;display:block;background:#0b0807}
+@media (max-width:980px){
+ .homeGo{grid-template-columns:minmax(0,1fr)}
+ .homeBtn button.main{width:100%}
+ .shelfRow{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+ .moyouStage{height:36vh;min-height:220px}
+ .moyouPic{object-position:30% 52%}
+ .moyouTag{top:8px;left:8px;font-size:14px;padding:2px 8px}.moyouTag.right{left:auto;right:8px}
+ .moyouBar{font-size:15px;gap:8px}
+ .sampleNote{font-size:13px}
+ .homeGo{margin-top:12px;gap:12px}
+ .homeGo h1{font-size:27px;margin-bottom:6px}
+ .homeGo .lead{font-size:17px;line-height:1.6}
+ .homeBtn button.main{min-height:72px;font-size:24px;min-width:0}
+ .shelf{margin-top:26px}
+ .shelfItem b{font-size:17px;padding:8px 8px 0}
+ .shelfNote{font-size:12.5px;padding:2px 8px 8px}
+ .sampleLabel{font-size:13px}
+ button.sampleBack{min-height:48px;font-size:17px;padding:0 12px}
+}

@@ -50,6 +50,12 @@ UI_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' d
 PAGE_CSP = ("sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/three@" + brain.THREE_VERSION + "/; "
             "style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
 STATIC = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8"}
+# はじめの画面の見本棚から開くもの。公開資料から作った手作りの見本だけ（親父さんの話を元にしたものは入れない）
+SAMPLES = ("tsugaru", "sakan", "tsugite", "ringo", "rousui")
+SAMPLE_DIR = HERE.parent
+SAMPLE_CSP = ("default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/three@" + brain.THREE_VERSION + "/; "
+              "style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src blob:; "
+              "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
 STAGE_NAMES = {
     "script": "台本を書いています", "scene": "3Dの物を作っています", "preflight": "言葉と形を確かめています",
     "check": "確かめています", "review": "確かめています", "judge": "確かめています", "fix": "直しています",
@@ -1027,6 +1033,15 @@ class Handler(BaseHTTPRequestHandler):
             html, _ = brain.build_html(self.store.spec(pid, p["current"]), test=self.store.test)
             name = re.sub(r"[^\w\-ぁ-んァ-ヶ一-龠ー]", "_", p.get("title") or "見えない仕事")[:40] + ".html"
             return self._send(200, {"html": html, "filename": name, "bytes": len(html.encode("utf-8")), "test": self.store.test})
+        m = re.fullmatch(r"/mihon/([a-z]+)/(scene\.json)?", path)
+        if m and m.group(1) in SAMPLES:
+            f = SAMPLE_DIR / m.group(1) / (m.group(2) or "index.html")
+            if f.is_file():
+                return self._send(200, f.read_bytes(), "application/json; charset=utf-8" if m.group(2) else STATIC["index.html"], csp=SAMPLE_CSP)
+            return self._send(404, {"error": "not_found"})
+        m = re.fullmatch(r"/home/([a-z_]+\.jpg)", path)
+        if m and (WEB / "home" / m.group(1)).is_file():
+            return self._send(200, (WEB / "home" / m.group(1)).read_bytes(), "image/jpeg")
         name = "index.html" if path == "/" else path.lstrip("/")
         if name in STATIC and (WEB / name).is_file():
             return self._send(200, (WEB / name).read_bytes(), STATIC[name], csp=UI_CSP)
