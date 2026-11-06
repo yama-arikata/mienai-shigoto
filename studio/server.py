@@ -840,6 +840,8 @@ class Engine:
         lv = self.live.get(pid)
         v["live"] = lv.view() if lv else None
         v["alive"] = pid in self.running
+        script = self.store.get_json(pid, "script.json")  # 実際に書かれた行だけを、途中の画面の札に出す
+        v["titles"] = [brain.plain(c.get("title") or "") for c in (script or {}).get("chapters", [])]
         return v
 
     def fix_view(self, p):

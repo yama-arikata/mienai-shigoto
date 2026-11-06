@@ -385,6 +385,7 @@ function pickAt(cx,cy){const nd=new THREE.Vector2(cx/innerWidth*2-1,-(cy/innerHe
   return{name:name||'名前のない物',point:[+h.point.x.toFixed(2),+h.point.y.toFixed(2),+h.point.z.toFixed(2)]};}return null;}
 canvas.addEventListener('pointerdown',e=>{if(picking)downAt={x:e.clientX,y:e.clientY,t:performance.now()};});
 canvas.addEventListener('pointerup',e=>{if(!picking||!downAt)return;const moved=Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y),quick=performance.now()-downAt.t<600;downAt=null;if(moved>7||!quick)return;const r=pickAt(e.clientX,e.clientY);say({kit:'picked',hit:r});});
+for(const n of['wheel','touchstart','pointerdown','keydown'])addEventListener(n,()=>say({kit:'touch'}),{passive:true});
 addEventListener('message',e=>{if(e.source!==window.parent||window.parent===window)return;const m=e.data||{};
  if(m.kit==='seek'){seek(+m.p||0);}
  else if(m.kit==='release'){frozen=null;}

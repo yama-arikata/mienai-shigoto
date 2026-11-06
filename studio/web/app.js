@@ -211,12 +211,14 @@ const WALL_PAINT = {
     }
   },
 };
-function makeWall(host, { labels = false } = {}) {
+function makeWall(host, { labels = false, names = null } = {}) {
   const scene = h('div', { class: 'wallScene' });
   const stage = h('div', { class: 'wallStage', 'aria-hidden': 'true' }, scene);
   host.append(stage);
-  const layers = WALL_LAYERS.map(l => {
+  const layers = WALL_LAYERS.map((l, n) => {
     const slab = h('div', { class: 'wallSlab' });
+    const clips = [];
+    let topFace = null;
     const face = (cls, css) => { const f = h('div', { class: cls }); f.style.cssText = css; slab.append(f); return f; };
     if (l.key === 'take') {
       for (const [k, z] of [['takeV', 0], ['takeH', 9]]) {
@@ -224,26 +226,30 @@ function makeWall(host, { labels = false } = {}) {
         c.className = 'wallFace';
         c.style.transform = `translateZ(${z}px)`;
         slab.append(c);
+        clips.push(c);
       }
     } else {
       const c = wallCanvas(WALL_PAINT[l.key]);
       c.className = 'wallFace';
       c.style.transform = `translateZ(${l.thick}px)`;
       slab.append(c);
-      face('wallFace', `width:${l.thick}px;height:${WALL_H}px;background:${l.side};transform-origin:0 0;transform:rotateY(-90deg)`);
-      face('wallFace', `width:${WALL_W}px;height:${l.thick}px;background:${l.top};transform-origin:0 0;transform:rotateX(90deg)`);
+      clips.push(c);
+      clips.push(face('wallFace', `width:${l.thick}px;height:${WALL_H}px;background:${l.side};transform-origin:0 0;transform:rotateY(-90deg)`));
+      topFace = face('wallFace', `width:${WALL_W}px;height:${l.thick}px;background:${l.top};transform-origin:0 0;transform:rotateX(90deg)`);
     }
     const dot = h('i', { class: 'wallDot' });
     slab.append(dot);
     scene.append(slab);
-    const tag = labels ? h('div', { class: 'wallLabel ' + l.key }, l.label) : null;
+    const tag = labels ? h('div', { class: 'wallLabel ' + (names ? 'step' : l.key) }, names ? names[n] : l.label) : null;
     if (tag) stage.append(tag);
-    return { ...l, slab, dot, tag };
+    const edge = names ? h('i', { class: 'wallEdge' }) : null;
+    if (edge) slab.append(edge);
+    return { ...l, slab, dot, tag, clips, topFace, edge };
   });
   let t = 0, shown = layers.length;
   function place() {
     for (const [i, l] of layers.entries()) {
-      const off = i >= shown ? 70 : 0;
+      const off = i >= shown && !names ? 70 : 0;
       l.slab.style.transform = `translateZ(${l.z + l.gap * t + off - 110}px)`;
       l.slab.classList.toggle('off', i >= shown);
     }
@@ -257,7 +263,7 @@ function makeWall(host, { labels = false } = {}) {
       l.tag.style.transform = `translate(${Math.round(r.left - b.left)}px,${rowY}px)`;
       l.tag.style.height = `${Math.max(20, Math.round(r.top - b.top - rowY))}px`;
       const front = i === layers.length - 1;
-      l.tag.style.opacity = front ? 1 : Math.max(0, Math.min(1, (t - .3 - (2 - i) * .14) / .16));
+      if (!names) l.tag.style.opacity = front ? 1 : Math.max(0, Math.min(1, (t - .3 - (2 - i) * .14) / .16));
     }
   }
   function fit() {
@@ -272,7 +278,21 @@ function makeWall(host, { labels = false } = {}) {
   return {
     stage,
     set(v) { t = v; place(); relabel(); },
-    build(n) { if (n === shown) return; shown = n; place(); },
+    // cur 番目の層を、下から f（0〜1）まで塗る。cur より前は塗り終わり、後はまだ無い
+    grow(cur, f) {
+      shown = cur + 1; place();
+      for (const [i, l] of layers.entries()) {
+        const amount = i < cur ? 1 : i === cur ? f : 0;
+        const clip = amount >= 1 ? 'none' : `inset(${((1 - amount) * 100).toFixed(1)}% 0 0 0)`;
+        for (const c of l.clips) c.style.clipPath = clip;
+        if (l.topFace) l.topFace.style.opacity = amount >= 1 ? 1 : 0;
+        if (l.edge) {
+          l.edge.hidden = i !== cur;
+          l.edge.style.transform = `translateY(${((1 - amount) * WALL_H).toFixed(1)}px) translateZ(${l.thick + 1}px)`;
+        }
+        if (l.tag) l.tag.className = `wallLabel step ${i < cur ? 'done' : i === cur ? 'now' : 'todo'}`;
+      }
+    },
     get t() { return t; },
     fit,
   };
@@ -430,17 +450,37 @@ function screenReview() {
 
 // ---------- ③ 作る→確かめる→直す ----------
 let prog = {};
+const BUILD_LAYERS = ['1　台本を書く', '2　3Dを作る', '3　確かめる', '4　直して仕上げる'];
 function screenProgress() {
-  prog = { title: h('h1', {}), kicker: h('div', { class: 'kicker' }), steps: h('ol', { class: 'steps' }), tick: h('div', { class: 'ticker' }), live: h('div', { class: 'livebox' }), log: h('ul', { class: 'log' }), act: h('div', { style: 'margin-bottom:26px' }), n: 0 };
-  const side = h('div', { class: 'progWall' });
-  put(view, h('div', { class: 'progGrid' }, side, h('div', { class: 'progMain' }, prog.kicker, prog.title, prog.tick, prog.steps, prog.live)), prog.act,
-    h('h2', {}, '見つけた問題と、直した所'), prog.log,
+  view.classList.add('build');
+  prog = { title: h('h1', {}), kicker: h('div', { class: 'kicker' }), steps: h('ol', { class: 'steps' }), tick: h('div', { class: 'ticker' }), live: h('div', { class: 'livebox' }), log: h('ul', { class: 'log' }), act: h('div', {}), n: 0,
+    fuda: h('ol', { class: 'fuda' }), fudaN: 0, shots: h('div', { class: 'peekShots' }), shotsKey: '', logHead: h('h2', {}, '見つけた問題と、直した所'), layer: 0 };
+  prog.fudaBox = h('div', { class: 'fudaBox' }, h('h2', {}, '台本に書かれた行'), prog.fuda);
+  prog.fudaBox.hidden = true;
+  prog.shotBox = h('div', { class: 'shotBox' }, h('h2', {}, 'できてきたページの画面'), prog.shots);
+  prog.shotBox.hidden = true;
+  const art = h('div', { class: 'buildArt' });
+  put(view, h('div', { class: 'buildGrid' }, art, h('div', { class: 'buildInfo' }, prog.kicker, prog.title, prog.tick, prog.live, prog.act, prog.fudaBox, prog.shotBox, prog.logHead, prog.log,
+    h('details', { class: 'fold plain' }, h('summary', {}, 'くわしい進み具合'), prog.steps),
     h('p', { class: 'notice' }, 'この確かめは、見た目と動きだけを見ています。仕事の中身が合っているかは、できたあとで、あなたの目で確かめてください。'),
-    h('p', { class: 'notice' }, 'この画面は閉じても大丈夫です。作るのは裏で続きます。ページが動くかを確かめる所だけは、この画面を開いている間に進みます。'));
-  prog.wall = makeWall(side);
-  side.append(h('div', { class: 'peelNote' }, '壁の絵は、進み具合の目印です。'));
-  prog.wall.set(.3);
-  prog.wall.build(1);
+    h('p', { class: 'notice' }, 'この画面は閉じても大丈夫です。作るのは裏で続きます。ページが動くかを確かめる所だけは、この画面を開いている間に進みます。'))));
+  prog.wall = makeWall(art, { labels: true, names: BUILD_LAYERS });
+  art.append(h('div', { class: 'buildNote' }, '壁の絵は、進み具合の目印です。あなたの仕事の絵ではありません。'));
+  prog.wall.set(.8);
+  prog.wall.grow(0, .02);
+}
+// いま塗っている層と、その塗り具合。塗り具合は経過時間から出す目印で、残り時間の見積もりではない
+function growOf(j) {
+  const st = j.stage;
+  const check = ['preflight', 'check', 'review', 'judge'].includes(st);
+  let layer = prog.layer;
+  if (st === 'script') layer = 0;
+  else if (st === 'scene') layer = 1;
+  else if (st === 'fix' || (check && j.rounds.length > 1)) layer = 3;
+  else if (check) layer = 2;
+  if (st === 'paused' || st === 'failed') return { layer, f: prog.f || .5 };
+  const tau = [25, 90, 40, 70][layer];
+  return { layer, f: Math.min(.96, .04 + (1 - Math.exp(-Math.max(0, j.now - j.stage_started) / tau))) };
 }
 function stepsOf(j) {
   const out = [];
@@ -480,9 +520,7 @@ function updateProgress() {
   // 書いている途中の様子（止まって見えないように）
   if (j.live) {
     prog.live.hidden = false;
-    const kids = [h('div', { class: 'small mute' }, j.stage === 'scene' ? `コードを書いています　${j.live.chars.toLocaleString()}字` : j.stage === 'review' ? `画面を見て、書いています　${j.live.chars.toLocaleString()}字` : `書いています　${j.live.chars.toLocaleString()}字`)];
-    if (j.stage === 'script' && j.live.titles.length) kids.push(h('ul', {}, j.live.titles.map(t => h('li', {}, t))));
-    prog.live.replaceChildren(...kids);
+    prog.live.replaceChildren(h('div', { class: 'small mute' }, j.stage === 'scene' ? `コードを書いています　${j.live.chars.toLocaleString()}字` : j.stage === 'review' ? `画面を見て、書いています　${j.live.chars.toLocaleString()}字` : `書いています　${j.live.chars.toLocaleString()}字`));
   } else if (j.stage === 'check') {
     prog.live.hidden = false;
     prog.live.replaceChildren(h('div', { class: 'small mute' }, 'パソコンとスマホの大きさで開いて、場面ごとに画面を撮っています。'));
@@ -491,6 +529,24 @@ function updateProgress() {
   }
   // ログは増えた分だけ足す
   for (; prog.n < j.log.length; prog.n++) prog.log.prepend(logItem(j.log[prog.n]));
+  // 実際に書かれた行だけを札にする。書き終わった台本があれば、そちらを読む
+  const titles = (j.titles && j.titles.length) ? j.titles : (j.live && j.stage === 'script' && j.live.titles) || [];
+  for (; prog.fudaN < titles.length; prog.fudaN++) prog.fuda.append(h('li', {}, titles[prog.fudaN]));
+  prog.fudaBox.hidden = !prog.fudaN;
+  // 確かめるときに撮った、本物の画面
+  const shotRound = j.rounds.slice().reverse().find(r => (r.images || []).length);
+  if (shotRound) {
+    const key = `${shotRound.round}:${shotRound.images.length}`;
+    if (prog.shotsKey !== key) {
+      prog.shotsKey = key;
+      prog.shots.replaceChildren(...shotRound.images.filter(x => x.view === 'PC').map(x => h('img', { src: shotUrl(x.name, shotRound.round), alt: 'できてきたページの画面', onclick: () => zoomImg(shotUrl(x.name, shotRound.round)) })));
+      prog.shotBox.hidden = !prog.shots.childElementCount;
+    }
+  }
+  prog.logHead.hidden = !j.log.length;
+  const grown = growOf(j);
+  prog.layer = grown.layer; prog.f = grown.f;
+  if (prog.wall) prog.wall.grow(grown.layer, grown.f);
   // 止まったときの出口
   prog.act.replaceChildren();
   if (j.stage === 'paused') {
@@ -505,7 +561,6 @@ function updateProgress() {
     const total = 1 + j.max_rounds * 2 + 1;
     const doneSteps = stepsOf(j).filter(s => s.state === 'done').length;
     snap(58 + Math.min(40, 40 * doneSteps / total));
-    if (prog.wall) prog.wall.build(Math.min(4, 1 + Math.round(3 * Math.min(1, doneSteps / total))));
   }
   // ブラウザが要る手順
   if (j.stage === 'check' && j.check) runBuildCheck(j.check);
@@ -575,15 +630,25 @@ let res = {};
 function screenResult() {
   const frame = h('iframe', { sandbox: 'allow-scripts', title: 'できたページ' });
   const tag = h('div', { class: 'frameTag', hidden: true });
-  res = { frame, tag, url: null, cur: { p: 0, chapter: '' }, picked: null, picking: false, panel: h('div', { class: 'panel' }), fixCard: null, fixKey: '', chapters: null, pendingGoto: null };
-  put(view, h('div', { class: 'result' }, h('div', { class: 'frameWrap' }, frame, tag), res.panel));
+  res = { frame, tag, url: null, cur: { p: 0, chapter: '' }, picked: null, picking: false, panel: h('div', { class: 'panel' }), fixCard: null, fixKey: '', chapters: null, pendingGoto: null, autoDone: false, auto: null };
+  res.wrap = h('div', { class: 'frameWrap' }, frame, tag);
+  res.rail = buildRail();
+  res.stageCol = h('div', { class: 'stageCol' }, res.wrap, res.rail.el);
+  put(view, h('div', { class: 'result' }, res.stageCol, res.panel));
   buildPanel();
 }
 addEventListener('message', e => {
   if (!res.frame || e.source !== res.frame.contentWindow || !e.data || !e.data.kit) return;
   const m = e.data;
-  if (m.kit === 'state') { res.cur = { p: m.p, chapter: m.chapter }; if (res.onState) res.onState(); }
-  if (m.kit === 'ready') { res.chapters = m.chapters || null; if (res.picking) res.frame.contentWindow.postMessage({ kit: 'pick', on: true }, '*'); if (res.pendingGoto) { gotoChapter(res.pendingGoto); res.pendingGoto = null; } }
+  if (m.kit === 'state') { res.cur = { p: m.p, chapter: m.chapter }; if (res.onState) res.onState(); updateRail(); markAsk(); }
+  if (m.kit === 'touch') stopAuto();
+  if (m.kit === 'ready') {
+    res.chapters = m.chapters || null;
+    if (res.picking) res.frame.contentWindow.postMessage({ kit: 'pick', on: true }, '*');
+    if (res.pendingGoto) { gotoChapter(res.pendingGoto); res.pendingGoto = null; }
+    else startAuto();
+    updateRail();
+  }
   if (m.kit === 'picked') { res.picked = m.hit; if (res.onPick) res.onPick(); }
   if (res.onRec) res.onRec(m);
 });
@@ -600,17 +665,78 @@ function setFrame(url, label) {
   res.tag.hidden = !label;
   res.tag.textContent = label || '';
 }
+// 開いたら少しだけ自動で進めて、中身の見える場面で止まる。さわったら、そこで止める
+const AUTO_AT = .7, AUTO_MS = 6500;
+function startAuto() {
+  if (res.autoDone || P.fix || !res.chapters || !res.chapters.length) return;
+  res.autoDone = true;
+  const c = res.chapters.find(x => x.a <= AUTO_AT && AUTO_AT < x.b) || res.chapters[res.chapters.length - 1];
+  const target = c.a + (c.b - c.a) * .5;
+  const send = p => res.frame.contentWindow.postMessage({ kit: 'goto', p }, '*');
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) { send(target); return; }
+  const a = res.auto = { on: true };
+  const t0 = performance.now() + 700;
+  const step = now => {
+    if (!a.on || !res.frame.isConnected) return;
+    const x = Math.max(0, Math.min(1, (now - t0) / AUTO_MS));
+    send(target * (x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2));
+    if (x < 1) requestAnimationFrame(step); else stopAuto();
+  };
+  requestAnimationFrame(step);
+  updateRail();
+}
+function stopAuto() {
+  res.autoDone = true;
+  if (res.auto) { res.auto.on = false; res.auto = null; updateRail(); }
+}
+addEventListener('blur', () => { if (res.frame && document.activeElement === res.frame) stopAuto(); });
+// 3Dの下の帯：スクロールに慣れていなくても、押すだけで場面を動かせる
+function buildRail() {
+  const prev = h('button', { class: 'railBtn', onclick: () => stepChapter(-1) }, '◀ 前の場面');
+  const next = h('button', { class: 'railBtn', onclick: () => stepChapter(1) }, '次の場面 ▶');
+  const title = h('div', { class: 'railTitle' });
+  const hint = h('div', { class: 'railHint' });
+  const pips = h('div', { class: 'railPips' });
+  return { el: h('div', { class: 'rail' }, prev, h('div', { class: 'railMid' }, title, pips, hint), next), prev, next, title, hint, pips, key: '' };
+}
+function chapterIndex() {
+  const list = P && P.chapters || [];
+  return list.findIndex(c => c.id === res.cur.chapter);
+}
+function stepChapter(d) {
+  const list = P.chapters || [];
+  const i = Math.max(0, chapterIndex());
+  const to = list[Math.max(0, Math.min(list.length - 1, i + d))];
+  if (to) gotoChapter(to.id);
+}
+function updateRail() {
+  const r = res.rail;
+  if (!r || !P) return;
+  const list = P.chapters || [];
+  const i = chapterIndex();
+  const key = list.map(c => c.id + (c.confirm ? '?' : '')).join();
+  if (r.key !== key) {
+    r.key = key;
+    r.pips.replaceChildren(...list.map(c => h('button', { class: 'pip' + (c.confirm ? ' ask' : ''), 'aria-label': c.title, title: c.title, onclick: () => gotoChapter(c.id) }, h('i', {}))));
+  }
+  [...r.pips.children].forEach((b, n) => b.classList.toggle('on', n === i));
+  r.title.textContent = i >= 0 ? `場面 ${i + 1} / ${list.length}　${list[i].title}` : '';
+  r.hint.textContent = res.auto ? '自動で進めています。さわると止まります。' : '3Dの上で上下に動かしても進みます。黄色の点は「職人に確認」の場面です。';
+  r.prev.disabled = i <= 0;
+  r.next.disabled = i < 0 || i >= list.length - 1;
+}
 function gotoChapter(id) {
+  stopAuto();
   if (!res.chapters) { res.pendingGoto = id; return; }
   const c = res.chapters.find(x => x.id === id);
   if (c) res.frame.contentWindow.postMessage({ kit: 'goto', p: c.a + (c.b - c.a) * .5 }, '*');
 }
 function buildPanel() {
   res.top = h('div', { class: 'card tape' });
-  res.ask = h('div', { class: 'card' });
-  res.auto = h('div', { class: 'card' });
+  res.ask = h('div', { class: 'card tape askCard' });
+  res.autoBox = h('div', { class: 'card' });
   res.out = h('div', { class: 'card' });
-  res.panel.replaceChildren(res.top, res.ask, res.auto, res.out);
+  res.panel.replaceChildren(res.top, res.ask, res.autoBox, res.out);
   buildOut();
 }
 function updateResult() {
@@ -620,13 +746,15 @@ function updateResult() {
   else setFrame(`/p/${P.id}?v=${P.current}`, '');
   renderFix();
   renderAsk();
-  renderAuto();
+ renderAuto();
+  updateRail();
   if (fx && fx.stage === 'fix_check' && fx.check) runFixCheck(fx.check);
 }
 
 // 「最後に、あなたの目で」＋「ここは違う」
 function renderFix() {
   const fx = P.fix;
+  syncCompare(fx);
   const key = fx ? `${fx.stage}:${fx.said}:${fx.shot_stamp || ''}` : (res.fixOpen ? 'open' : 'idle') + P.can_undo + P.person_fixes;
   if (res.fixKey === key) { if (fx && (fx.stage === 'fixing' || fx.stage === 'fix_repair') && res.fixTick) res.fixTick(fx); return; }
   res.fixKey = key;
@@ -635,10 +763,10 @@ function renderFix() {
   c.replaceChildren();
   if (!fx && !res.fixOpen) {
     put(c, h('h2', {}, '最後に、あなたの目で確かめてください'),
-      h('p', { class: 'small' }, '自動で確かめたのは、見た目と動きだけです。仕事の中身が合っているかは、あなたにしか分かりません。スクロールして見てください。'),
-      h('button', { class: 'main', onclick: () => { res.fixOpen = true; renderFix(); } }, 'ここは違う'),
-      h('p', { class: 'small mute', style: 'margin:12px 0 0' }, `あなたが直した回数: ${P.person_fixes}回`),
-      P.can_undo ? h('button', { class: 'thin', onclick: async () => { await post('/api/undo', { id: P.id }); toast('1つ前に戻しました'); load(P.id); } }, '1つ前に戻す') : null);
+      h('p', { class: 'small' }, '自動で確かめたのは、見た目と動きだけです。仕事の中身が合っているかは、あなたにしか分かりません。'),
+      h('button', { class: 'main big', onclick: () => { res.fixOpen = true; renderFix(); } }, 'ここは違う'),
+      P.person_fixes ? h('p', { class: 'small mute', style: 'margin:12px 0 0' }, `あなたが直した回数: ${P.person_fixes}回`) : null,
+      P.can_undo ? h('button', { class: 'thin', style: 'margin-top:8px', onclick: async () => { await post('/api/undo', { id: P.id }); toast('1つ前に戻しました'); load(P.id); } }, '1つ前に戻す') : null);
     return;
   }
   if (!fx) return renderFixInput(c);
@@ -652,16 +780,16 @@ function renderFix() {
   if (fx.stage === 'fix_check') { put(c, h('h2', {}, '案が動くか、確かめています')); return; }
   if (fx.stage === 'proposed') {
     res.showDraft = res.showDraft || false;
+    const canSee = fx.img_before && fx.img_after;
     put(c, h('h2', {}, 'こう直す案です'), h('p', { class: 'small' }, fx.summary),
-      h('div', { class: 'ba' },
-        fx.img_before ? h('figure', {}, h('figcaption', {}, '直す前'), h('img', { src: shotUrl(fx.img_before, fx.shot_stamp), alt: '直す前の画面', onclick: () => zoomImg(shotUrl(fx.img_before, fx.shot_stamp)) })) : null,
-        fx.img_after ? h('figure', {}, h('figcaption', {}, '直したあと'), h('img', { src: shotUrl(fx.img_after, fx.shot_stamp), alt: '直したあとの画面', onclick: () => zoomImg(shotUrl(fx.img_after, fx.shot_stamp)) })) : null),
-      h('ul', { class: 'diff' }, (fx.diff || []).map(d => h('li', {}, h('b', {}, d.label), h('del', {}, d.before), h('ins', {}, d.after)))),
+      canSee && !res.showDraft ? res.cmpNote = h('p', { class: 'small cmpNote' }, 'つまみを動かすと、直す前と直したあとを見比べられます。') : null,
       (fx.out_of_scope || []).length ? h('div', { class: 'stop small' }, h('strong', {}, 'これは今回直せません'), fx.out_of_scope.map(o => h('div', {}, `${o.request}: ${o.reason}`))) : null,
       h('div', { class: 'btnrow' },
-        h('button', { class: 'main', onclick: async () => { res.showDraft = false; res.fixOpen = false; await post('/api/commit', { id: P.id }); toast('当てました。元に戻すこともできます。'); load(P.id); } }, 'これでいい'),
+        h('button', { class: 'main', onclick: async () => { res.showDraft = false; res.fixOpen = false; res.pendingGoto = fx.focus || null; await post('/api/commit', { id: P.id }); toast('当てました。元に戻すこともできます。'); load(P.id); } }, 'これでいい'),
         h('button', { onclick: async () => { res.showDraft = false; res.fixOpen = true; res.againText = fx.said; await post('/api/cancel', { id: P.id }); load(P.id); } }, '違う')),
-      h('button', { class: 'thin', style: 'margin-top:10px', onclick: () => { res.showDraft = !res.showDraft; res.fixKey = ''; if (res.showDraft) res.pendingGoto = fx.focus; updateResult(); showFrame(); } }, res.showDraft ? '今のページに戻して見る' : '直したあとを3Dで動かして見る'));
+      h('button', { class: 'thin', style: 'margin-top:10px', onclick: () => { res.showDraft = !res.showDraft; res.fixKey = ''; if (res.showDraft) res.pendingGoto = fx.focus; updateResult(); showFrame(); } }, res.showDraft ? (canSee ? '絵で見比べる' : '今のページに戻して見る') : '直したあとを3Dで動かして見る'),
+      (fx.diff || []).length ? h('details', { class: 'fold plain' }, h('summary', {}, '文章で見る'),
+        h('ul', { class: 'diff' }, fx.diff.map(d => h('li', {}, h('b', {}, d.label), h('del', {}, d.before), h('ins', {}, d.after))))) : null);
     return;
   }
   if (fx.stage === 'declined') {
@@ -678,6 +806,136 @@ function renderFix() {
       fx.resumable ? h('button', { class: 'main', onclick: async () => { await post('/api/resume', { id: P.id }); load(P.id); } }, '続きから') : null,
       h('button', { style: 'margin-top:8px', onclick: async () => { await post('/api/cancel', { id: P.id }); load(P.id); } }, '閉じる'));
   }
+}
+// ---- 直す前と直したあとを、3Dと同じ大きさの枠で見比べる ----
+function syncCompare(fx) {
+  const want = fx && fx.stage === 'proposed' && !res.showDraft && fx.img_before && fx.img_after;
+  const key = want ? `${fx.img_before}:${fx.img_after}:${fx.shot_stamp || ''}` : '';
+  if (res.cmpKey === key) return;
+  if (res.cmp) { res.cmp.close(); res.cmp = null; }
+  res.cmpKey = key;
+  res.rail.el.hidden = !!want;
+  if (want) { stopAuto(); res.cmp = openCompare(shotUrl(fx.img_before, fx.shot_stamp), shotUrl(fx.img_after, fx.shot_stamp)); }
+}
+function openCompare(beforeUrl, afterUrl) {
+  const before = h('img', { src: beforeUrl, alt: '直す前の画面', class: 'cmpImg' });
+  const after = h('img', { src: afterUrl, alt: '直したあとの画面', class: 'cmpImg' });
+  const line = h('i', { class: 'cmpLine' });
+  const marks = h('div', { class: 'cmpMarks' });
+  const tagB = h('div', { class: 'cmpTag right' }, '直す前'), tagA = h('div', { class: 'cmpTag left' }, '直したあと');
+  const box = h('div', { class: 'cmpBox' }, before, after, marks, line, tagA, tagB);
+  const stage = h('div', { class: 'cmpStage' }, box);
+  const range = h('input', { type: 'range', min: 0, max: 100, value: 0, class: 'peel', 'aria-label': '直す前と直したあとを見比べる' });
+  const toB = h('button', { class: 'cmpBtn', onclick: () => glide(0) }, '直す前');
+  const toA = h('button', { class: 'cmpBtn', onclick: () => glide(100) }, '直したあと');
+  const bar = h('div', { class: 'cmpBar' }, toB, range, toA);
+  res.wrap.append(stage);
+  res.wrap.classList.add('cmp');
+  res.rail.el.after(bar);
+  if (res.wrap.getBoundingClientRect().top < 0) res.wrap.scrollIntoView({ block: 'start' }); // スマホで下にいても、まず絵を見せる
+  let anim = 0, closed = false;
+  const set = v => {
+    range.value = v;
+    after.style.clipPath = `inset(0 ${100 - v}% 0 0)`;
+    line.style.left = v + '%';
+    line.style.opacity = v > 0 && v < 100 ? 1 : 0;
+    tagA.style.opacity = v > 8 ? 1 : 0;
+    tagB.style.opacity = v < 92 ? 1 : 0;
+    toB.classList.toggle('on', v < 50);
+    toA.classList.toggle('on', v >= 50);
+  };
+  function glide(to, ms = 450, then) {
+    cancelAnimationFrame(anim);
+    if (matchMedia('(prefers-reduced-motion:reduce)').matches) { set(to); if (then) then(); return; }
+    const from = +range.value, t0 = performance.now();
+    const step = now => {
+      if (closed) return;
+      const x = Math.min(1, (now - t0) / ms), e = x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+      set(from + (to - from) * e);
+      if (x < 1) anim = requestAnimationFrame(step); else if (then) then();
+    };
+    anim = requestAnimationFrame(step);
+  }
+  range.addEventListener('input', () => { cancelAnimationFrame(anim); set(+range.value); });
+  const fit = () => {
+    const nw = before.naturalWidth, nh = before.naturalHeight;
+    if (!nw || closed) return;
+    if (innerWidth <= 980) res.wrap.style.height = Math.round(Math.min(res.wrap.clientWidth * nh / nw, innerHeight * .66)) + 'px';
+    const k = Math.min(stage.clientWidth / nw, stage.clientHeight / nh);
+    box.style.width = Math.round(nw * k) + 'px';
+    box.style.height = Math.round(nh * k) + 'px';
+  };
+  const ro = window.ResizeObserver ? new ResizeObserver(fit) : null;
+  if (ro) ro.observe(stage);
+  set(0);
+  let loaded = 0;
+  const onload = () => {
+    if (++loaded < 2 || closed) return;
+    fit();
+    const rects = findChanges(before, after);
+    marks.replaceChildren(...rects.map((r, i) => {
+      const m = h('div', { class: 'cmpMark' }, i === 0 ? h('span', {}, 'ここが変わりました') : null);
+      m.style.cssText = `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`;
+      return m;
+    }));
+    if (res.cmpNote) res.cmpNote.textContent = rects.length ? '黄色の枠が、絵の変わった所です。つまみを動かすと見比べられます。' : '変わった所を枠で示せませんでした。つまみを動かして見比べてください。';
+    setTimeout(() => { if (!closed && +range.value === 0) glide(100, 1500, () => marks.classList.add('on')); else marks.classList.add('on'); }, 700);
+  };
+  for (const im of [before, after]) { if (im.complete && im.naturalWidth) onload(); else im.addEventListener('load', onload); }
+  return { close() {
+    closed = true;
+    cancelAnimationFrame(anim);
+    if (ro) ro.disconnect();
+    stage.remove(); bar.remove();
+    res.wrap.classList.remove('cmp');
+    res.wrap.style.height = '';
+  } };
+}
+// 2枚の絵を小さくして比べ、大きく変わったかたまりを返す（%）。全体が変わっているときは枠を出さない
+function findChanges(a, b) {
+  const W = 64, H = Math.max(8, Math.round(W * a.naturalHeight / a.naturalWidth));
+  const grab = im => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, W, H); return g.getImageData(0, 0, W, H).data; };
+  let da, db;
+  try { da = grab(a); db = grab(b); } catch (e) { return []; }
+  const hot = new Uint8Array(W * H);
+  let n = 0;
+  for (let i = 0; i < W * H; i++) {
+    const d = (Math.abs(da[i * 4] - db[i * 4]) + Math.abs(da[i * 4 + 1] - db[i * 4 + 1]) + Math.abs(da[i * 4 + 2] - db[i * 4 + 2])) / 3;
+    if (d > 12) { hot[i] = 1; n++; }
+  }
+  if (!n || n > W * H * .5) return [];
+  const seen = new Uint8Array(W * H), blobs = [];
+  for (let i = 0; i < W * H; i++) {
+    if (!hot[i] || seen[i]) continue;
+    const stack = [i];
+    seen[i] = 1;
+    const o = { n: 0, x0: W, y0: H, x1: 0, y1: 0 };
+    while (stack.length) {
+      const k = stack.pop(), x = k % W, y = (k - x) / W;
+      o.n++; o.x0 = Math.min(o.x0, x); o.x1 = Math.max(o.x1, x); o.y0 = Math.min(o.y0, y); o.y1 = Math.max(o.y1, y);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy, m = ny * W + nx;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && hot[m] && !seen[m]) { seen[m] = 1; stack.push(m); }
+      }
+    }
+    if (o.n >= 4) blobs.push(o);
+  }
+  // 近いかたまりは、ひとつの枠にまとめる
+  for (let again = true; again;) {
+    again = false;
+    for (let i = 0; i < blobs.length && !again; i++) for (let j = i + 1; j < blobs.length; j++) {
+      const p = blobs[i], q = blobs[j];
+      if (Math.max(p.x0, q.x0) - Math.min(p.x1, q.x1) > 6 || Math.max(p.y0, q.y0) - Math.min(p.y1, q.y1) > 6) continue;
+      blobs[i] = { n: p.n + q.n, x0: Math.min(p.x0, q.x0), x1: Math.max(p.x1, q.x1), y0: Math.min(p.y0, q.y0), y1: Math.max(p.y1, q.y1) };
+      blobs.splice(j, 1);
+      again = true;
+      break;
+    }
+  }
+  return blobs.sort((p, q) => q.n - p.n).slice(0, 3).map(o => {
+    const x0 = Math.max(0, o.x0 - 1), y0 = Math.max(0, o.y0 - 1), x1 = Math.min(W, o.x1 + 2), y1 = Math.min(H, o.y1 + 2);
+    return { x: x0 / W * 100, y: y0 / H * 100, w: (x1 - x0) / W * 100, h: (y1 - y0) / H * 100 };
+  });
 }
 function renderFixInput(c) {
   const ta = h('textarea', { placeholder: '「紙は5枚重ねる」のように書いてください', 'aria-label': 'どこが違いますか', rows: 3, value: res.againText || '' });
@@ -727,18 +985,25 @@ function renderAsk() {
   c.replaceChildren();
   c.hidden = !items.length && !unk.length;
   if (c.hidden) return;
-  put(c, h('h2', {}, 'ここは職人に確認'));
+  put(c, h('h2', {}, 'ここは職人に確認', items.length ? h('span', { class: 'count' }, `あと${items.length}つ`) : null));
   if (items.length) put(c, h('p', { class: 'small mute' }, 'お客さんのページにも、確認中と出ています。合っていれば消せます。'));
+  res.askRows = [];
   for (const it of items) {
-    put(c, h('div', { class: 'ask' }, h('b', {}, it.title), h('div', { class: 'q' }, it.confirm),
+    const row = h('div', { class: 'ask' }, h('button', { class: 'askGo', onclick: () => { gotoChapter(it.id); showFrame(); } }, it.title), h('div', { class: 'q' }, it.confirm),
       h('div', { class: 'btnrow' },
         h('button', { class: 'thin', onclick: async () => { await post('/api/confirm', { id: P.id, chapter: it.id }); load(P.id); } }, '合っている'),
-        h('button', { class: 'thin', onclick: () => { gotoChapter(it.id); res.fixOpen = true; res.againText = ''; res.fixKey = ''; renderFix(); scrollTo(0, 0); } }, '直す'))));
+        h('button', { class: 'thin', onclick: () => { gotoChapter(it.id); res.fixOpen = true; res.againText = ''; res.fixKey = ''; renderFix(); scrollTo(0, 0); } }, '直す')));
+    res.askRows.push([it.id, row]);
+    put(c, row);
   }
   if (unk.length) {
-    put(c, h('p', { class: 'small', style: 'font-weight:700;margin-bottom:4px' }, 'まだ聞けていないこと'));
-    put(c, h('ul', { class: 'small', style: 'margin:0;padding-left:20px' }, unk.map(u => h('li', {}, u))));
+    put(c, h('details', { class: 'fold plain', open: !items.length || unk.length <= 2 }, h('summary', {}, `まだ聞けていないこと ${unk.length}つ`),
+      h('ul', { class: 'small', style: 'margin:0;padding-left:20px' }, unk.map(u => h('li', {}, u)))));
   }
+  markAsk();
+}
+function markAsk() {
+  for (const [id, row] of res.askRows || []) row.classList.toggle('now', id === res.cur.chapter);
 }
 
 // 自動で確かめたこと（正しい・完成とは言わない）
@@ -748,24 +1013,25 @@ function renderAuto() {
   const key = JSON.stringify([j.log.length, j.remaining.length, j.stage]);
   if (res.autoKey === key) return;
   res.autoKey = key;
-  const c = res.auto;
+  const c = res.autoBox;
+  const wasOpen = c.querySelector('details')?.open;
   c.replaceChildren();
-  const eyeCount = j.rounds.filter(r => r.eye).length;
   const high = j.remaining.filter(x => x.severity === 'high');
   const low = j.remaining.filter(x => x.severity !== 'high');
-  put(c, h('h2', {}, '自動で確かめたこと'),
-    h('p', { class: 'small' }, `見た目と動きを${j.rounds.length}回確かめて、${j.rounds.filter(r => r.fix && r.fix.to_version).length}回直しました。` + (j.reverted ? `直して悪くなった版は${j.reverted}回、前の版へ戻しました。` : '')));
+  const body = h('div', {});
+  put(body, h('p', { class: 'small' }, `見た目と動きを${j.rounds.length}回確かめて、${j.rounds.filter(r => r.fix && r.fix.to_version).length}回直しました。` + (j.reverted ? `直して悪くなった版は${j.reverted}回、前の版へ戻しました。` : '')));
   if (high.length) {
-    put(c, h('div', { class: 'stop small' }, h('strong', {}, `直しきれなかった問題が${high.length}つあります`), high.map(x => h('div', { style: 'margin-top:6px' }, x.text))));
+    put(body, h('div', { class: 'stop small' }, h('strong', {}, `直しきれなかった問題が${high.length}つあります`), high.map(x => h('div', { style: 'margin-top:6px' }, x.text))));
   } else {
-    put(c, h('p', { class: 'small' }, low.length ? '動かなくなる問題はありません。下の点は直しきれませんでした。' : '見た目と動きに、問題は見つかりませんでした。'));
+    put(body, h('p', { class: 'small' }, low.length ? '動かなくなる問題はありません。下の点は直しきれませんでした。' : '見た目と動きに、問題は見つかりませんでした。'));
   }
-  put(c, h('p', { class: 'small mute' }, 'これは「仕事の中身が合っている」という意味ではありません。'));
-  if (low.length) put(c, h('div', { class: 'small', style: 'margin:6px 0' }, h('strong', {}, `直しきれなかった点 ${low.length}つ`), low.map(x => h('div', { style: 'margin-top:6px' }, x.text))));
+  put(body, h('p', { class: 'small mute' }, 'これは「仕事の中身が合っている」という意味ではありません。'));
+  if (low.length) put(body, h('div', { class: 'small', style: 'margin:6px 0' }, h('strong', {}, `直しきれなかった点 ${low.length}つ`), low.map(x => h('div', { style: 'margin-top:6px' }, x.text))));
   const times = j.rounds.map(r => `${r.round}回目 ${ms((r.machine ? r.machine.ms : 0) + (r.eye ? r.eye.ms || 0 : 0) + (r.fix ? r.fix.ms || 0 : 0))}`).join(' / ');
-  put(c, h('details', {}, h('summary', { class: 'small' }, '見つけた問題と、直した所'),
+  put(body, h('details', {}, h('summary', { class: 'small' }, '見つけた問題と、直した所'),
     h('ul', { class: 'log' }, j.log.slice().reverse().map(logItem)),
     h('p', { class: 'small mute' }, `全部で ${min(j.ended - j.started)}。台本 ${ms(j.times.script_ms)}・3D ${ms(j.times.scene_ms)}・${times}`)));
+  put(c, h('details', { class: 'fold', open: high.length > 0 || wasOpen }, h('summary', {}, high.length ? `自動で確かめたこと（直しきれなかった問題 ${high.length}つ）` : '自動で確かめたこと'), body));
 }
 
 // ⑤ 持ち出す
@@ -792,13 +1058,13 @@ function buildOut() {
     const d = await get('/api/link?id=' + P.id);
     put(msg, h('div', { class: 'urlbox' }, d.url), h('p', { class: 'small mute', style: 'margin:0' }, d.note));
   };
-  put(c, h('h2', {}, '持ち出す'),
+  put(c, h('details', { class: 'fold', id: 'outFold' }, h('summary', {}, '持ち出す（コード・動画・リンク）'),
     h('div', { class: 'btnrow' },
       h('button', { class: 'thin', onclick: copy }, 'コードをコピー'),
       h('button', { class: 'thin', onclick: () => startRecord(msg, 1280, 720) }, '動画を保存（横）'),
       h('button', { class: 'thin', onclick: () => startRecord(msg, 720, 1280) }, '動画を保存（縦）'),
       h('button', { class: 'thin', onclick: link }, 'リンクをもらう')),
-    msg);
+    msg));
 }
 function startRecord(msg, w, hh) {
   const n = (P.chapters || []).length;
@@ -837,10 +1103,11 @@ async function runFixCheck(chk) {
     if (out.ok) {
       const ch = (fr.chapters || []).find(c => c.id === chk.focus);
       const p = ch ? ch.a + (ch.b - ch.a) * .55 : .5;
-      images.after = await takeShot(fr, p, 960, 540);
+      const [sw, sh] = innerWidth < 700 ? [540, 960] : [960, 540]; // スマホでは縦の絵で見比べる
+      images.after = await takeShot(fr, p, sw, sh);
       const before = await checkFrame(chk.before, 1280, 720);
       const old = (before.fr.chapters || []).find(c => c.id === chk.focus);
-      images.before = await takeShot(before.fr, old ? old.a + (old.b - old.a) * .55 : p, 960, 540);
+      images.before = await takeShot(before.fr, old ? old.a + (old.b - old.a) * .55 : p, sw, sh);
       before.fr.close();
     }
   } catch (e) {}
