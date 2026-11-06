@@ -279,7 +279,7 @@ main.build{max-width:1320px;margin:0 auto;padding:14px 26px 60px}
 .shelfNote{font-size:14px;line-height:1.5;color:var(--mute);padding:2px 12px 12px}
 main.sample{position:fixed;inset:0;z-index:20;max-width:none;margin:0;padding:0;display:flex;flex-direction:column;background:#0b0807}
 .sampleTop{display:flex;align-items:center;gap:14px;padding:8px 12px;background:var(--ai)}
-button.sampleBack{flex:none;min-height:56px;font-size:19px;padding:0 20px;white-space:nowrap}
+main.sample button.sampleBack{flex:none;width:auto;min-height:56px;font-size:19px;padding:0 20px;white-space:nowrap}
 .sampleLabel{font-size:15px;line-height:1.45;color:var(--ink);word-break:auto-phrase}
 .sampleFrame{flex:1;min-height:0;width:100%;border:0;display:block;background:#0b0807}
 @media (max-width:980px){
@@ -301,5 +301,6 @@ button.sampleBack{flex:none;min-height:56px;font-size:19px;padding:0 20px;white-
  .shelfItem b{font-size:17px;padding:8px 8px 0}
  .shelfNote{font-size:12.5px;padding:2px 8px 8px}
  .sampleLabel{font-size:13px}
- button.sampleBack{min-height:48px;font-size:17px;padding:0 12px}
+ main.sample button.sampleBack{min-height:48px;font-size:17px;padding:0 12px}
+ .sampleTop{gap:10px;padding:6px 10px}
 }
