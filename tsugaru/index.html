@@ -54,7 +54,6 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 <script type="module">
 import * as THREE from 'three';
-import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const S=await fetch('scene.json',{cache:'no-store'}).then(r=>r.json());
@@ -74,40 +73,53 @@ try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffe
 catch(e){document.getElementById('err').style.display='block';throw e;}
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.05;
+renderer.toneMappingExposure=1;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x100c0a);
+scene.background=new THREE.Color(0x0c0907);
+scene.fog=new THREE.Fog(0x0c0907,11,26);
 const camera=new THREE.PerspectiveCamera(36,1,.05,80);
-scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+// 薄暗い部屋と、高い所の格子窓。漆に映り込む光はここから来る（外から何も読み込まない）
+(function(){const room=new THREE.Scene();
+ const wall=new THREE.Mesh(new THREE.BoxGeometry(20,10,20),new THREE.MeshBasicMaterial({color:0x17110c,side:THREE.BackSide}));wall.position.y=3;room.add(wall);
+ const pane=(x,y,z,w,h,ry,rx,pw)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:new THREE.Color(pw,pw*.95,pw*.84),side:THREE.DoubleSide}));m.position.set(x,y,z);m.rotation.set(rx,ry,0);room.add(m);};
+ for(let i=0;i<4;i++)for(let j=0;j<3;j++)pane(-4.8+i*1.3,6.9,-1.6+j*1.6,1.18,1.46,0,Math.PI/2,9);   // 天の格子窓
+ pane(9.5,3.6,1,.5,5,-Math.PI/2,0,1.5);                                                              // 右からの細い明かり
+ scene.environment=new THREE.PMREMGenerator(renderer).fromScene(room,.012).texture;})();
 
 const phone=innerWidth<760;
-const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+let seed=20261106;const rand=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+const rnd=(a=1,b)=>b===undefined?rand()*a:a+rand()*(b-a);
 const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
 function tex(size,draw,rx=1,ry=1){const c=document.createElement('canvas');c.width=c.height=size;draw(c.getContext('2d'),size);
  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
 
 // 板の大きさと層の厚み（見やすく誇張）
-const BW=6.4,BD=4.2,A=.27,TH=.05,N=S.coats.length;
+const BW=6.4,BD=4.2,A=.15,TH=.03,N=S.coats.length;
 
 // 仕掛けの山を高さの表にする
 const HS=phone?1024:2048,hf=new Float32Array(HS*HS);
 (function(){const n=phone?S.spikesPhone:S.spikes;
- for(let k=0;k<n;k++){const cx=rnd(HS),cy=rnd(HS),big=Math.random()<.14,r=(big?rnd(22,54):rnd(5,20))*HS/2048,tall=big?rnd(.55,1):rnd(.24,.68),st=rnd(.55,.95),an=rnd(6.28),sq=rnd(.45,1),p1=rnd(6.28),p2=rnd(6.28),a1=rnd(.1,.34),a2=rnd(.04,.2);
+ for(let k=0;k<n;k++){const cx=rnd(HS),cy=rnd(HS),big=rand()<.2,r=(big?rnd(20,46):rnd(6,20))*HS/2048,tall=big?rnd(.62,.95):rnd(.34,.7),an=rnd(6.28),sq=rnd(.5,1),p1=rnd(6.28),p2=rnd(6.28),a1=rnd(.05,.2),a2=rnd(.02,.1);
   const R=Math.ceil(r*1.5),ca=Math.cos(an),sa=Math.sin(an);
   for(let y=-R;y<=R;y++)for(let x=-R;x<=R;x++){const ix=(Math.round(cx)+x+HS)%HS,iy=(Math.round(cy)+y+HS)%HS,u=(x*ca+y*sa)/r,v=(-x*sa+y*ca)/(r*sq),d=Math.sqrt(u*u+v*v);if(d>=1)continue;
-   const th=Math.atan2(v,u),w=Math.sin(th*3+p1)*a1+Math.sin(th*7+p2)*a2,h=tall*Math.pow(Math.max(0,1-d*(1+w)),st);const i=iy*HS+ix;if(h>hf[i])hf[i]=h;}}})();
+   const th=Math.atan2(v,u),w=Math.sin(th*3+p1)*a1+Math.sin(th*7+p2)*a2,e=Math.max(0,1-d*(1+w)),h=tall*Math.pow(1-(1-e)*(1-e),1.5);const i=iy*HS+ix;if(h>hf[i])hf[i]=h;}}
+ // 角を丸める（ぐるりとつながる形のまま）
+ for(let pass=0;pass<2;pass++){const o=hf.slice();const q=phone?2:4;for(let y=0;y<HS;y++)for(let x=0;x<HS;x++){let a=0;for(let k=-q;k<=q;k++)a+=o[y*HS+(x+k+HS)%HS];hf[y*HS+x]=a/(2*q+1);}
+  const o2=hf.slice();for(let x=0;x<HS;x++)for(let y=0;y<HS;y++){let a=0;for(let k=-q;k<=q;k++)a+=o2[((y+k+HS)%HS)*HS+x];hf[y*HS+x]=a/(2*q+1);}}})();
 const hd=new Uint16Array(HS*HS);for(let i=0;i<hd.length;i++)hd[i]=THREE.DataUtils.toHalfFloat(hf[i]);
 const hTex=new THREE.DataTexture(hd,HS,HS,THREE.RedFormat,THREE.HalfFloatType);hTex.wrapS=hTex.wrapT=THREE.ClampToEdgeWrapping;hTex.minFilter=hTex.magFilter=THREE.LinearFilter;hTex.needsUpdate=true;
 
+const Lgood0=TH*(N-.35);
 const pal=S.coats.map(c=>new THREE.Color(c));
 const coreC=new THREE.Color(S.core);
-const U={uH:{value:hTex},uA:{value:0},uSweep:{value:-.2},uT:{value:TH},uCoats:{value:0},uL:{value:9},uGloss:{value:.1},uPal:{value:pal},uCore:{value:coreC},uTop:{value:new THREE.Color(0x8a7a66)},uN:{value:N},uTexel:{value:1/HS}};
+const U={uH:{value:hTex},uA:{value:0},uSweep:{value:-.2},uT:{value:TH},uCoats:{value:0},uL:{value:9},uGloss:{value:.1},uPal:{value:pal},uCore:{value:coreC},uTop:{value:new THREE.Color(0x6f6256)},uN:{value:N},uTexel:{value:1/HS}};
 const common=`uniform sampler2D uH;uniform float uA,uSweep,uT,uCoats,uL,uGloss,uN;uniform vec3 uPal[${N}],uCore,uTop;
 float bump(vec2 uv){return uA*(1.-smoothstep(uSweep-.02,uSweep+.02,uv.x))*texture2D(uH,uv).r;}
 float top(vec2 uv){float t=bump(uv)+uT*uCoats;return min(t,uL);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=fract(sin(dot(i,vec2(12.99,78.23)))*43758.55),b=fract(sin(dot(i+vec2(1.,0.),vec2(12.99,78.23)))*43758.55),c=fract(sin(dot(i+vec2(0.,1.),vec2(12.99,78.23)))*43758.55),d=fract(sin(dot(i+vec2(1.,1.),vec2(12.99,78.23)))*43758.55);return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}
 vec3 layerCol(float k,float aa){float i=floor(k);int a=int(clamp(i,0.,uN-1.));vec3 c=uPal[a];
  if(k<0.)c=uCore;return c;}`;
 
@@ -126,17 +138,24 @@ const topMat=new THREE.ShaderMaterial({uniforms:U,vertexShader:common+`varying v
   vec3 c;
   if(uCoats<.02&&!cut)c=mix(uTop,uCore,smoothstep(.002,.012,b));
   else if(hN<0.)c=uTop;
-  else{float kk=cut?k:uCoats-.01;int a=int(clamp(floor(kk),0.,uN-1.));c=kk<0.?uCore:uPal[a];
-   float w=fwidth(kk)*1.2,f=fract(kk);if(kk>=0.&&w>0.&&w<.6&&f<w){int a2=int(clamp(floor(kk)-1.,0.,uN-1.));c=mix(floor(kk)<1.?uCore:uPal[a2],c,.5+.5*f/w);}}
-  vec3 V=normalize(cameraPosition-vW),L1=normalize(vec3(.4,.9,.45)),L2=normalize(vec3(-.6,.5,.2));
+  else{float kk=cut?k+(vn(vU*190.)-.5)*.42+(vn(vU*610.)-.5)*.2:uCoats-.01;int a=int(clamp(floor(kk),0.,uN-1.));c=kk<0.?uCore:uPal[a];
+   float w=fwidth(kk)*1.2,f=fract(kk);if(kk>=0.&&w>0.&&w<.6&&f<w){int a2=int(clamp(floor(kk)-1.,0.,uN-1.));c=mix(floor(kk)<1.?uCore:uPal[a2],c,.5+.5*f/w);}
+   c*=.9+.2*vn(vU*23.);}
+  vec3 V=normalize(cameraPosition-vW),L1=normalize(vec3(-.45,.85,.3)),L2=normalize(vec3(.6,.4,.3));
   float rough=cut?mix(.75,.05,uGloss):.14;
   if(cut&&uGloss<.5){float sc=hs(floor(vU*vec2(1400.,40.)))*.5+.5;c*=mix(.86+.14*sc,1.,uGloss*2.);N=normalize(N+vec3(0.,0.,(sc-.75)*.06*(1.-uGloss*2.)));}
-  float diff=max(dot(N,L1),0.)*.95+max(dot(N,L2),0.)*.3+.22;
+  float diff=max(dot(N,L1),0.)*.85+max(dot(N,L2),0.)*.18+.34;
   float ph=mix(14.,340.,1.-rough);
-  vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),ph)*(1.-rough)*1.3;
-  vec3 R=reflect(-V,N);float env=smoothstep(.25,.95,R.y)*(.55+.45*smoothstep(-.4,.4,R.x));
-  float fr=.04+.96*pow(1.-max(dot(N,V),0.),5.);
-  vec3 col=c*diff*(1.-rough*.08)+vec3(1.,.97,.9)*(sp+env*fr*mix(.25,1.5,1.-rough));
+  vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),ph)*(1.-rough)*.35;
+  vec3 R=reflect(-V,N);
+  // 高い所の格子窓が映る。研いだばかりの面はぼやけ、艶が出ると格子まで見える
+  float soft=mix(.02,.5,rough);vec2 q=R.xz/(abs(R.y)+.18);
+  float win=smoothstep(soft,0.,max(abs(q.x+2.3)-.8,abs(q.y)-1.))*step(0.,R.y);
+  vec2 cell=abs(fract(vec2(q.x+2.3,q.y)*vec2(2.1,1.45))-.5);
+  win*=mix(1.,smoothstep(.0,.045,.5-max(cell.x,cell.y)),1.-rough);win*=smoothstep(.93,.995,N.y);
+  float room=mix(.015,.13,smoothstep(-.1,.9,R.y));
+  float fr=.045+.955*pow(1.-max(dot(N,V),0.),5.);
+  vec3 col=c*diff*(1.-rough*.08)+vec3(1.,.96,.86)*(sp+(win*2.2+room)*fr*mix(.35,1.,1.-rough));
   gl_FragColor=vec4(col,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -145,13 +164,25 @@ const board=new THREE.Mesh(topGeo,topMat);board.frustumCulled=false;scene.add(bo
 
 // 切り口（手前と右）
 function sideMat(axis){return new THREE.ShaderMaterial({uniforms:U,side:THREE.DoubleSide,
- vertexShader:common+`varying float vY;varying vec2 vTU;
- void main(){vTU=uv;vec3 p=position;float t=top(uv);p.y=mix(-.06,t,position.y);vY=p.y;vec4 w=modelMatrix*vec4(p,1.);gl_Position=projectionMatrix*viewMatrix*w;}`,
- fragmentShader:common+`varying float vY;varying vec2 vTU;
- void main(){float b=bump(vTU),k=(vY-b)/uT;vec3 c;
-  if(vY<0.)c=uTop;else if(k<0.)c=uCore;else{int a=int(clamp(floor(k),0.,uN-1.));c=uPal[a];
-   float w=fwidth(k);if(fract(k)<w*1.2)c*=.55;}
-  c*=.95;gl_FragColor=vec4(c,1.);
+ vertexShader:common+`varying float vY;varying vec2 vTU;varying vec3 vW;
+ void main(){vTU=uv;vec3 p=position;float t=top(uv);p.y=mix(-.06,t,position.y);vY=p.y;vec4 w=modelMatrix*vec4(p,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:common+`varying float vY;varying vec2 vTU;varying vec3 vW;
+ void main(){float b=bump(vTU),k=(vY-b)/uT;vec3 c;float tp=top(vTU);
+  float h=.9+.2*vn(vec2(vTU.x*340.,vY*90.));
+  if(vY<0.)c=uTop*(.78+.34*vn(vec2(vTU.x*520.,vY*760.)));
+  else if(k<0.)c=uCore;
+  else{int a=int(clamp(floor(k),0.,uN-1.));c=uPal[a];
+   float l=dot(c,vec3(.3,.59,.11));c=mix(vec3(l),c,.82);
+   float f=fract(k);
+   c*=mix(.66,1.08,smoothstep(0.,.62,f))*h;           // 一層ごとに下は沈み、上は明るい
+   float w=fwidth(k);c*=mix(.55,1.,smoothstep(0.,max(w*1.5,.05),min(f,1.-f)));}  // 層の継ぎ目は細く暗く
+  // 手前から落ちる光。右上が明るく、遠い方と下は沈む
+  vec3 Lp=vec3(1.2,1.5,5.2)-vW;float fall=clamp(11./(1.+dot(Lp,Lp)),.25,1.25);
+  float upper=mix(.72,1.,smoothstep(-.06,.2,vY));
+  c*=fall*upper*.92;
+  // 上の縁にだけ、艶の細い光
+  float rim=smoothstep(.012,.0,tp-vY)*.05;c+=vec3(1.,.96,.86)*rim;
+  gl_FragColor=vec4(c,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
  }`,extensions:{derivatives:true}});}
@@ -165,7 +196,42 @@ side([1,0],[1,1],[BW/2,BD/2],[BW/2,-BD/2],sm);
 const woodTex=tex(1024,(g,s)=>{g.fillStyle='#b98d5c';g.fillRect(0,0,s,s);for(let k=0;k<420;k++){g.globalAlpha=rnd(.05,.18);g.fillStyle=k%2?'#8b633c':'#d3ab7c';g.fillRect(0,rnd(s),s,rnd(1,5));}g.globalAlpha=1;});
 const wood=new THREE.Mesh(new THREE.BoxGeometry(BW,.52,BD),new THREE.MeshStandardMaterial({map:woodTex,roughness:.72,envMapIntensity:.4}));wood.position.y=-.32;wood.castShadow=true;scene.add(wood);
 const tableTex=tex(1024,(g,s)=>{g.fillStyle='#231813';g.fillRect(0,0,s,s);for(let k=0;k<900;k++){g.globalAlpha=rnd(.02,.09);g.fillStyle=k%2?'#000':'#4b3429';g.fillRect(0,rnd(s),s,rnd(1,4));}g.globalAlpha=1;},2,2);
-const table=new THREE.Mesh(new THREE.PlaneGeometry(40,30),new THREE.MeshStandardMaterial({map:tableTex,roughness:.65,envMapIntensity:.4}));table.rotation.x=-Math.PI/2;table.position.y=-.58;table.receiveShadow=true;scene.add(table);
+const table=new THREE.Mesh(new THREE.PlaneGeometry(60,40),new THREE.MeshStandardMaterial({map:tableTex,roughness:.5,envMapIntensity:.55}));table.rotation.x=-Math.PI/2;table.position.y=-.58;table.receiveShadow=true;scene.add(table);
+
+// 器：研ぎ終えた模様を焼き付けて、丸盆・椀・小皿にする。形と色は見本
+function hex(c){return [parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];}
+const wvT=new Float32Array(256*256);for(let i=0;i<wvT.length;i++)wvT[i]=rand()-.5;
+const wvS=(x,y,f)=>{const X=x*f,Y=y*f,i=Math.floor(X),j=Math.floor(Y),a=X-i,b=Y-j,u=a*a*(3-2*a),v=b*b*(3-2*b),g=(p,q)=>wvT[((q&255)<<8)|(p&255)];return (g(i,j)*(1-u)+g(i+1,j)*u)*(1-v)+(g(i,j+1)*(1-u)+g(i+1,j+1)*u)*v;};
+const wv=(x,y)=>wvS(x,y,190/HS)*.42+wvS(x,y,610/HS)*.2;
+const lacquerTex=(function(){const c=document.createElement('canvas');c.width=c.height=HS;const g=c.getContext('2d'),im=g.createImageData(HS,HS),P=S.coats.map(hex),C=hex(S.core),L=Lgood0,d=im.data;
+ for(let y=0;y<HS;y++)for(let x=0;x<HS;x++){const i=y*HS+x,b=A*hf[i],k=(L-b)/TH+wv(x,y);
+  const gx=Math.abs(hf[y*HS+(x+1)%HS]-hf[i])*A/TH,gy=Math.abs(hf[((y+1)%HS)*HS+x]-hf[i])*A/TH,w=Math.max(.04,Math.min(.5,(gx+gy)*.9));
+  const at=q=>q<0?C:P[Math.min(N-1,Math.floor(q))];const a=at(k),f=k-Math.floor(k),o=at(k-1),m=f<w?.5+.5*f/w:1;
+  const n=i*4,sh=.9+wvS(x,y,23/HS)*.4;for(let j=0;j<3;j++)d[n+j]=(o[j]+(a[j]-o[j])*m)*sh;d[n+3]=255;}
+ g.putImageData(im,0,0);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;})();
+// 手で研いだ面のわずかなうねり（映り込みが、まっすぐになりすぎないように）
+const wobbleTex=tex(512,(g,s)=>{g.fillStyle='#808080';g.fillRect(0,0,s,s);for(let k=0;k<70;k++){const x=rnd(s),y=rnd(s),r=rnd(40,130),v=rand()<.5?255:0,gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,`rgba(${v},${v},${v},.1)`);gr.addColorStop(1,`rgba(${v},${v},${v},0)`);g.fillStyle=gr;for(const[a,b]of[[0,0],[s,0],[-s,0],[0,s],[0,-s]]){g.setTransform(1,0,0,1,a,b);g.fillRect(x-r,y-r,r*2,r*2);}g.setTransform(1,0,0,1,0,0);}});wobbleTex.colorSpace=THREE.NoColorSpace;
+const lacquer=(map)=>new THREE.MeshPhysicalMaterial({map,color:0xffffff,roughness:.3,metalness:0,clearcoat:1,clearcoatRoughness:.035,envMapIntensity:1.25,bumpMap:wobbleTex,bumpScale:.5,side:THREE.DoubleSide});
+const plain=new THREE.MeshPhysicalMaterial({color:S.coats[1],roughness:.3,clearcoat:1,clearcoatRoughness:.035,envMapIntensity:1.25,side:THREE.DoubleSide});
+function curve(pts,n=14){const out=[];const c=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],0)),false,'centripetal');return c.getPoints(pts.length*n).map(v=>new THREE.Vector2(Math.max(0,v.x),v.y));}
+// 外から見える面は、弧の長さでも角度でも模様の大きさがそろうように貼る
+function ware(pts,mat,o={}){const g=new THREE.LatheGeometry(curve(pts),160),p=g.attributes.position,uv=g.attributes.uv,sc=o.scale||.3;
+ if(o.planar){for(let i=0;i<p.count;i++){const r=Math.hypot(p.getX(i),p.getZ(i))||1,a=r+Math.abs(p.getY(i))*1.2;uv.setXY(i,p.getX(i)/r*a*sc*.3+.13,p.getZ(i)/r*a*sc*.3+.37);}}
+ else{let arc=0;const rows=p.count/161,len=[0];const prof=curve(pts);for(let i=1;i<prof.length;i++){arc+=prof[i].distanceTo(prof[i-1]);len.push(arc);}
+  for(let i=0;i<p.count;i++){const row=i%rows;uv.setXY(i,Math.round(o.turn||2)*Math.floor(i/rows)/160,len[row]*sc*.3);}}
+ const m=new THREE.Mesh(g,mat);m.castShadow=true;m.receiveShadow=true;return m;}
+const WARE=new THREE.Vector3(-7.4,-.58,-.6),wares=new THREE.Group();wares.position.copy(WARE);scene.add(wares);
+const tray=ware([[0,.05],[1.2,.05],[2.05,.05],[2.28,.09],[2.42,.2],[2.48,.25],[2.53,.22],[2.5,.1],[2.3,0]],lacquer(lacquerTex),{planar:true,scale:1});wares.add(tray);
+const bowl=new THREE.Group();bowl.position.set(.62,.05,-.42);wares.add(bowl);
+bowl.add(ware([[.46,0],[.5,.02],[.48,.13],[.56,.2],[.82,.42],[1.02,.78],[1.1,1.1],[1.115,1.16]],lacquer(lacquerTex),{turn:2,scale:1}));
+bowl.add(ware([[1.115,1.16],[1.095,1.17],[1.03,1.02],[.84,.62],[.5,.36],[0,.3]],plain));
+const dish=new THREE.Group();dish.position.set(-1.05,.05,.72);wares.add(dish);
+dish.add(ware([[0,.03],[.5,.03],[.74,.09],[.86,.19],[.88,.21],[.86,.22],[.7,.13],[.45,.08],[0,.08]],lacquer(lacquerTex),{planar:true,scale:1}));
+const under=tex(256,(g,s)=>{const gr=g.createRadialGradient(s/2,s/2,s*.28,s/2,s/2,s/2);gr.addColorStop(0,'rgba(0,0,0,.85)');gr.addColorStop(1,'rgba(0,0,0,0)');g.clearRect(0,0,s,s);g.fillStyle=gr;g.fillRect(0,0,s,s);});
+const ao=new THREE.Mesh(new THREE.PlaneGeometry(6.2,6.2),new THREE.MeshBasicMaterial({map:under,transparent:true,depthWrite:false}));ao.rotation.x=-Math.PI/2;ao.position.y=.004;wares.add(ao);
+// 奥のうす明かり
+const glowTex=tex(256,(g,s)=>{const gr=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);gr.addColorStop(0,'rgba(120,88,58,.5)');gr.addColorStop(1,'rgba(120,88,58,0)');g.clearRect(0,0,s,s);g.fillStyle=gr;g.fillRect(0,0,s,s);});
+const glow=new THREE.Mesh(new THREE.PlaneGeometry(34,17),new THREE.MeshBasicMaterial({map:glowTex,transparent:true,depthWrite:false,fog:false}));glow.position.set(-6,3.2,-15);scene.add(glow);
 
 // ヘラと砥石
 const metal=new THREE.MeshStandardMaterial({color:0xd6c8a6,roughness:.55,envMapIntensity:.8});
@@ -174,17 +240,17 @@ const stone=new THREE.Mesh(new RoundedBoxGeometry(1.1,.3,.62,4,.05),new THREE.Me
 const shadowCatcher=new THREE.Mesh(new THREE.PlaneGeometry(BW,BD),new THREE.ShadowMaterial({opacity:.3}));shadowCatcher.rotation.x=-Math.PI/2;shadowCatcher.visible=false;scene.add(shadowCatcher);
 
 // 光
-scene.add(new THREE.HemisphereLight(0xfff0dd,0x2a1c14,.9));
-const key=new THREE.DirectionalLight(0xfff0dd,2.4);key.position.set(4,8,5);key.castShadow=true;key.shadow.mapSize.set(2048,2048);
-Object.assign(key.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:1,far:24});key.shadow.bias=-.0005;key.shadow.normalBias=.02;scene.add(key);
+scene.add(new THREE.HemisphereLight(0xffeedd,0x1a100a,.28));
+const key=new THREE.DirectionalLight(0xffeedc,1.9);key.position.set(-8,9,4);key.target.position.set(-3.6,-.5,0);scene.add(key.target);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.radius=7;
+Object.assign(key.shadow.camera,{left:-11,right:11,top:9,bottom:-9,near:1,far:30});key.shadow.bias=-.0004;key.shadow.normalBias=.02;scene.add(key);
 
 // カメラ
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 const keys=[
- {p:0,c:V(2.6,4.6,5.2),l:V(.5,0,0)},{p:.11,c:V(2.1,3.6,4.2),l:V(.7,.05,.3)},
+ {p:0,c:V(-6.1,3.1,6.9),l:V(-7.72,-.1,-.3)},{p:.11,c:V(-6.5,2.4,5.5),l:V(-7.6,-.02,-.45)},
  {p:.17,c:V(1.6,.42,3.9),l:V(.9,-.08,2.1)},{p:.26,c:V(1.5,.42,3.7),l:V(.9,-.04,2.1)},
  {p:.31,c:V(1.9,2.4,4.2),l:V(.6,.05,1)},{p:.41,c:V(1.4,2,3.6),l:V(.5,.1,1)},
- {p:.46,c:V(1.2,.62,3.45),l:V(.75,.14,2.1)},{p:.59,c:V(1,.72,3.3),l:V(.7,.18,2.1)},
+ {p:.46,c:V(1.55,.62,3.75),l:V(.72,.06,2.1)},{p:.59,c:V(1.3,.66,3.5),l:V(.68,.08,2.1)},
  {p:.635,c:V(2.8,3.8,4.8),l:V(.6,.05,.1)},{p:.68,c:V(2.6,3.5,4.6),l:V(.6,.05,.1)},
  {p:.74,c:V(1.5,2.5,3),l:V(.5,.2,.5)},{p:.85,c:V(1.25,2.1,2.5),l:V(.5,.2,.5)},
  {p:.91,c:V(.9,3.8,3),l:V(.45,0,.1)},{p:1,c:V(.8,4,2.8),l:V(.45,0,.1)}];
@@ -226,7 +292,7 @@ function apply(p,t){
  camAt(p);
  if(portrait){const d=cp.clone().sub(cl);camera.position.copy(cl).add(d.multiplyScalar(1.34));}else camera.position.copy(cp);
  camera.lookAt(cl);
- for(const c of caps){const o=ss(c.a-.012,c.a+.008,p)*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
+ for(const c of caps){const o=(c.a<=0?1:ss(c.a-.012,c.a+.008,p))*(1-ss(c.b-.008,c.b+.012,p));c.el.style.opacity=o;c.el.style.visibility=o>.01?'visible':'hidden';c.el.style.pointerEvents=o>.8?'auto':'none';}
  hint.style.opacity=p<.03?1:0;barI.style.height=(p*100)+'%';
 }
 const prm=matchMedia('(prefers-reduced-motion: reduce)').matches;
