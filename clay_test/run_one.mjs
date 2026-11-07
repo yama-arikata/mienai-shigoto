@@ -49,8 +49,11 @@ async function api(method, p, body) {
   return { status: v.status, body: b };
 }
 
+// 参考の写真（任意）: --photos a.jpg,b.jpg。画面と同じく、長辺1280pxのJPEGにしてから渡す（ここでは縮めない）
+const PHOTOS = (arg('photos', '') || '').split(',').filter(Boolean).map(f => fs.readFileSync(f).toString('base64'));
+if (PHOTOS.length) log('参考の写真', PHOTOS.length, '枚を付けます');
 const t0 = Date.now();
-let r = await api('POST', '/api/start', ANS.intake);
+let r = await api('POST', '/api/start', PHOTOS.length ? { ...ANS.intake, photos: PHOTOS } : ANS.intake);
 if (r.status !== 200 || !r.body.id) { console.error('はじめられませんでした', r); process.exit(1); }
 const pid = r.body.id; log('プロジェクト', pid, '（', LABEL, '）');
 const used = {};
