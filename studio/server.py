@@ -77,6 +77,60 @@ button{margin-top:12px;background:#f2c230;color:#1a1608;border:2px solid #1a1608
 <p>審査の方へ。提出フォームにある合言葉を入れてください。</p>__ERR__<input name="code" type="password" autocomplete="off" aria-label="合言葉" autofocus required><button>開く</button></form></body></html>"""
 
 
+MAX_PHOTO_BYTES = 2_000_000  # 参考の写真1枚の上限（縮めたJPEGのあと）
+START_CAP = 40_000 + brain.MAX_PHOTOS * (MAX_PHOTO_BYTES * 4 // 3 + 8)
+
+
+def clean_jpeg(raw):
+    """JPEG だけを受ける。EXIF などの付けたし（APP1〜APP15・コメント）は捨てる。形が違えば ValueError。"""
+    if raw[:3] != b"\xff\xd8\xff":
+        raise ValueError("not jpeg")
+    out, i, n = bytearray(b"\xff\xd8"), 2, len(raw)
+    while True:
+        if i + 4 > n or raw[i] != 0xFF:
+            raise ValueError("broken jpeg")
+        marker = raw[i + 1]
+        if marker == 0xFF:  # 詰め物
+            i += 1
+            continue
+        size = int.from_bytes(raw[i + 2:i + 4], "big")
+        if size < 2 or i + 2 + size > n:
+            raise ValueError("broken jpeg")
+        if not (0xE1 <= marker <= 0xEF or marker == 0xFE):
+            out += raw[i:i + 2 + size]
+        i += 2 + size
+        if marker == 0xDA:  # ここから先は絵のデータ
+            rest = raw[i:]
+            if not rest.rstrip(b"\x00").endswith(b"\xff\xd9"):
+                raise ValueError("broken jpeg")
+            return bytes(out + rest)
+
+
+def read_photos(value):
+    """画面から来た写真（base64 の並び）を確かめる。(JPEGの並び, 問題) を返す。"""
+    if value in (None, []):
+        return [], None
+    unread = "参考の写真を読めませんでした。JPEGの写真だけ使えます。"
+    if not isinstance(value, list):
+        return None, unread
+    if len(value) > brain.MAX_PHOTOS:
+        return None, f"参考の写真は{brain.MAX_PHOTOS}枚までです。"
+    out = []
+    for v in value:
+        if not isinstance(v, str):
+            return None, unread
+        if len(v) > MAX_PHOTO_BYTES * 4 // 3 + 8:
+            return None, "参考の写真が大きすぎます。1枚2MBまでです。"
+        try:
+            raw = base64.b64decode(v, validate=True)
+            if len(raw) > MAX_PHOTO_BYTES:
+                return None, "参考の写真が大きすぎます。1枚2MBまでです。"
+            out.append(clean_jpeg(raw))
+        except ValueError:
+            return None, unread
+    return out, None
+
+
 def now():
     return time.time()
 
@@ -248,6 +302,17 @@ class Store:
             raise ValueError("bad image")
         (self.dir(pid) / "shots" / name).write_bytes(raw)
 
+    def put_photos(self, pid, photos):
+        d = self.dir(pid) / "photos"
+        d.mkdir(exist_ok=True)
+        for i, raw in enumerate(photos, 1):
+            (d / f"{i}.jpg").write_bytes(raw)
+
+    def photos(self, pid):
+        """Claude に見せる参考の写真（base64）。無ければ空。"""
+        d = self.dir(pid) / "photos"
+        return [base64.b64encode((d / f"{i}.jpg").read_bytes()).decode("ascii") for i in range(1, brain.MAX_PHOTOS + 1) if (d / f"{i}.jpg").is_file()]
+
     def shot_path(self, pid, name):
         if not re.fullmatch(r"[a-z0-9_]{1,24}\.jpg", name or ""):
             return None
@@ -368,7 +433,7 @@ class Engine:
                 if len(p["qa"]) >= brain.MAX_QUESTIONS:
                     q = {"done": True}
                 else:
-                    q = brain.next_question(self.ask, p)
+                    q = brain.next_question(self.ask, p, photos=self.store.photos(pid))
                 with self.store.edit(pid) as p:
                     p["asking"], p["ask_error"] = False, None
                     if q.get("done"):
@@ -414,7 +479,8 @@ class Engine:
         p = self.store.load(pid)
         t0 = now()
         lv = self._live(pid)
-        raw, model = brain.write_script(self.ask, p, on_text=lv.feed)
+        photos = self.store.photos(pid)
+        raw, model = brain.write_script(self.ask, p, on_text=lv.feed, photos=photos)
         raw = brain.tidy_script(raw, p)
         errs = brain.check_script(raw)
         if errs:
@@ -422,7 +488,7 @@ class Engine:
                 self.log(q, "found", "台本に直す所がありました。書き直しています。")
             self.store.memo(pid, "script_flagged", json.dumps(errs, ensure_ascii=False))
             lv = self._live(pid)
-            raw, model = brain.write_script(self.ask, p, on_text=lv.feed, note="前の台本には次の問題がありました。主張ごと消すか、形を直してください。同じ意味の言い換えはしません: " + " / ".join(errs))
+            raw, model = brain.write_script(self.ask, p, on_text=lv.feed, photos=photos, note="前の台本には次の問題がありました。主張ごと消すか、形を直してください。同じ意味の言い換えはしません: " + " / ".join(errs))
             raw = brain.tidy_script(raw, p)
             errs = brain.check_script(raw)
             if errs:
@@ -868,7 +934,7 @@ class Engine:
             "qa": [{"axis": q["axis"], "axis_name": brain.AXES.get(q["axis"], ""), "q": q["q"], "a": q.get("a") or "", "skipped": bool(q.get("skipped"))} for q in p["qa"]],
             "pending": p.get("pending"), "asking": p.get("asking"), "ask_error": p.get("ask_error"),
             "current": p.get("current"), "can_undo": len(p.get("history", [])) > 1, "person_fixes": p.get("person_fixes", 0),
-            "job": self.job_view(p), "fix": self.fix_view(p), "max_questions": brain.MAX_QUESTIONS,
+            "job": self.job_view(p), "fix": self.fix_view(p), "max_questions": brain.MAX_QUESTIONS, "photos": p.get("photos", 0),
         }
         if spec:
             view["chapters"] = [{"id": c["id"], "title": brain.plain(c["title"]), "body": brain.plain(c["body"]), "confirm": c.get("confirm") or ""} for c in spec["chapters"]]
@@ -1070,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
         if self._judge_gate():
             return
         path = self.path.split("?", 1)[0]
-        cap = 24_000_000 if path == "/api/report" else 40_000
+        cap = 24_000_000 if path == "/api/report" else START_CAP if path == "/api/start" else 40_000
         try:
             size = int(self.headers.get("Content-Length") or 0)
             if size > cap:
@@ -1118,7 +1184,14 @@ class Handler(BaseHTTPRequestHandler):
             if not text and item["key"] != "looks":
                 return self._send(400, {"error": "empty", "key": item["key"]})
             intake[item["key"]] = text
+        photos, bad = read_photos(data.get("photos"))
+        if bad:
+            return self._send(400, {"error": "bad_photo", "message": bad})
         p = self.store.create(intake)
+        if photos:
+            self.store.put_photos(p["id"], photos)
+            with self.store.edit(p["id"]) as q:
+                q["photos"] = len(photos)
         self.engine.ask_next(p["id"])
         return self._send(200, {"id": p["id"]})
 

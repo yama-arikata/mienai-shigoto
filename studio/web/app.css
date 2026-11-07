@@ -336,3 +336,11 @@ main.sample button.sampleBack{flex:none;width:auto;min-height:44px;font-size:15p
  main.sample button.sampleBack{min-height:48px;font-size:17px;padding:0 12px}
  .sampleTop{gap:10px;padding:6px 10px}
 }
+/* 参考の写真（任意） */
+.photoFold{margin-top:22px}
+.photoFold .notice{margin:4px 0}
+.photoThumbs{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+.photoThumbs:empty{display:none}
+.photoThumb{margin:0;display:flex;flex-direction:column;gap:6px;width:120px}
+.photoThumb img{width:120px;height:90px;object-fit:cover;display:block;border:2px solid var(--ai3);border-radius:3px}
+.photoThumb button.thin{min-height:36px;width:100%}

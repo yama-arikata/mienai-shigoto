@@ -16,6 +16,7 @@
   名札隠れ  … 名札の先が物に隠れる → Claudeの目と一緒に1回で直す
 何も入れなければ、1回目は不合格 → 直して合格。
 """
+import base64
 import json
 import pathlib
 import re
@@ -180,8 +181,22 @@ def _meta(user):
     return {}
 
 
+def _photos_ok(user):
+    """参考の写真が付いていたら、Claude に渡せる形（base64 の JPEG）かだけ確かめる。"""
+    if isinstance(user, dict):
+        return
+    for item in user:
+        if item.get("type") == "image":
+            raw = base64.b64decode(item["source"]["data"], validate=True)
+            if item["source"]["media_type"] != "image/jpeg" or raw[:2] != b"\xff\xd8":
+                raise ValueError("photo")
+
+
 def make_ask():
     def ask(purpose, system, user, schema, effort="medium", max_tokens=32000, on_text=None):
+        if purpose in ("question", "script"):
+            _photos_ok(user)
+            user = _meta(user)  # 参考の写真が付いていても、最後のJSON文だけ読む
         if purpose == "question":
             n = user.get("asked", 0)
             time.sleep(.3)
