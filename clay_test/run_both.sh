@@ -5,8 +5,9 @@
 set -u; setopt nullglob
 cd "${0:A:h}/.." || exit 1
 PORT=8994
-read -s "ANTHROPIC_API_KEY?APIキー: " && export ANTHROPIC_API_KEY
-echo
+# キーチェーンに裏方用のキー（yama-anthropic-api）があればそれを使う。無ければその場で聞く
+ANTHROPIC_API_KEY=$(security find-generic-password -a "$USER" -s yama-anthropic-api -w 2>/dev/null) || { read -s "ANTHROPIC_API_KEY?APIキー: "; echo; }
+export ANTHROPIC_API_KEY
 [[ -n "$ANTHROPIC_API_KEY" ]] || { echo "キーが空でした"; exit 1; }
 ~/Documents/YAMA_TOOLS_LAB/wait_for_quiet_mac.sh --quiet || { echo "Macが混んでいたので止めました"; exit 1; }
 
