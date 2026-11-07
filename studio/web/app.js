@@ -1121,8 +1121,20 @@ function buildOut() {
   };
   const link = async () => {
     msg.replaceChildren();
-    const d = await get('/api/link?id=' + P.id);
-    put(msg, h('div', { class: 'urlbox' }, d.url), h('p', { class: 'small mute', style: 'margin:0' }, d.note));
+    const d = await post('/api/share', { id: P.id });
+    const text = `${P.title || '見えない仕事'}\n${d.url}`;
+    const sent = h('p', { class: 'small', style: 'margin:6px 0 0' });
+    const send = async () => {
+      if (navigator.share) { try { await navigator.share({ title: P.title || '見えない仕事', url: d.url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      try { await navigator.clipboard.writeText(d.url); sent.textContent = 'リンクをコピーしました。'; } catch (e) { sent.textContent = 'コピーできませんでした。上のリンクを長押ししてコピーしてください。'; }
+    };
+    const stop = async () => { await post('/api/unshare', { id: P.id }); msg.replaceChildren(h('p', { class: 'small mute', style: 'margin:0' }, 'リンクを止めました。前に送ったリンクは開けなくなります。')); };
+    put(msg, h('div', { class: 'urlbox' }, d.url), h('p', { class: 'small mute', style: 'margin:0 0 6px' }, d.note),
+      d.public ? h('div', { class: 'btnrow' },
+        h('a', { class: 'btn', style: 'min-height:44px;font-size:15px', href: 'https://line.me/R/msg/text/?' + encodeURIComponent(text), target: '_blank', rel: 'noopener' }, 'LINEで送る'),
+        h('button', { class: 'thin', onclick: send }, 'ほかの方法で送る'),
+        h('button', { class: 'thin', onclick: stop }, 'リンクを止める')) : null,
+      sent);
   };
   put(c, h('details', { class: 'fold', id: 'outFold' }, h('summary', {}, '持ち出す（コード・動画・リンク）'),
     h('div', { class: 'btnrow' },

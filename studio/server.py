@@ -913,6 +913,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        if getattr(self, "_noindex", False):
+            self.send_header("X-Robots-Tag", "noindex")
         if csp:
             self.send_header("Content-Security-Policy", csp)
         self.end_headers()
@@ -980,6 +982,13 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs, urlsplit
         return {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
 
+    def _shared(self, token):
+        for p in self.store.all():
+            sh = p.get("share") or {}
+            if sh.get("token") and secrets.compare_digest(sh["token"].encode(), token.encode()):
+                return self.store.spec(p["id"], sh["version"])
+        return None
+
     def _page(self, spec, csp=PAGE_CSP):
         html, _ = brain.build_html(spec, test=self.store.test)
         return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8", csp=csp)
@@ -990,9 +999,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._same_site():
             return self._send(403, {"error": "forbidden"})
+        path = self.path.split("?", 1)[0]
+        m = re.fullmatch(r"/s/([A-Za-z0-9_-]{22})", path)
+        if m:  # 見るだけのリンク。合言葉なしで開ける（作った人が「リンクを作る」を押したものだけ）
+            spec = self._shared(m.group(1))
+            self._noindex = True
+            return self._page(spec) if spec else self._send(404, {"error": "not_found"})
         if self._judge_gate():
             return
-        path = self.path.split("?", 1)[0]
         q = self._query()
         if path == "/api/state":
             return self._send(200, {"test": self.store.test, "key": claude.has_key(), "no_key_message": claude.NO_KEY, "max_rounds": self.engine.max_rounds, "max_questions": brain.MAX_QUESTIONS,
@@ -1083,7 +1097,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.store.exists(pid):
             return self._send(404, {"error": "not_found"})
         route = {"/api/answer": self._answer, "/api/ask_again": self._ask_again, "/api/edit_answer": self._edit_answer, "/api/generate": self._generate, "/api/report": self._report,
-                 "/api/resume": self._resume, "/api/fix": self._fix, "/api/commit": self._commit, "/api/cancel": self._cancel, "/api/undo": self._undo, "/api/confirm": self._confirm}.get(path)
+                 "/api/resume": self._resume, "/api/fix": self._fix, "/api/commit": self._commit, "/api/cancel": self._cancel, "/api/undo": self._undo, "/api/confirm": self._confirm,
+                 "/api/share": self._share, "/api/unshare": self._unshare}.get(path)
         if not route:
             return self._send(404, {"error": "not_found"})
         return route(pid, data)
@@ -1188,6 +1203,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def _undo(self, pid, data):
         return self._send(200, {"ok": self.engine.undo(pid)})
+
+    def _share(self, pid, data):
+        """いまの形を、合言葉なしで見られるリンクにする。あとで直しても、作り直すまでリンクの中身は変わらない。"""
+        with self.store.edit(pid) as p:
+            if not p.get("current"):
+                return self._send(409, {"error": "not_ready"})
+            p["share"] = {"token": secrets.token_urlsafe(16), "version": p["current"], "issued": now()}
+            token = p["share"]["token"]
+        host = self.headers.get("Host")
+        scheme = "https" if self.judge and host in self.judge.hosts else "http"
+        local = not (self.judge and host in self.judge.hosts)
+        note = "このパソコンの中だけで開けるリンクです。外の人には見えません。" if local else "リンクを知っている人なら誰でも、合言葉なしで見られます（見るだけ。直したり作ったりはできません）。"
+        return self._send(200, {"url": f"{scheme}://{host}/s/{token}", "note": note, "public": not local})
+
+    def _unshare(self, pid, data):
+        with self.store.edit(pid) as p:
+            p.pop("share", None)
+        return self._send(200, {"ok": True})
 
     def _confirm(self, pid, data):
         return self._send(200, {"ok": self.engine.confirm(pid, str(data.get("chapter") or ""))})
