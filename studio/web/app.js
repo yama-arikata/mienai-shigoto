@@ -67,6 +67,58 @@ function zoomImg(src) {
 
 let STATE = null, P = null, screen = '', timer = null, serverLost = false;
 const drafts = { job: '', work: '', looks: '' };
+let photoDrafts = []; // 参考の写真（任意・最大3枚）。縮めたJPEGの base64 と見本の小さな絵
+
+// ---------- 参考の写真（任意）。ブラウザで長辺1280pxのJPEGに描き直す＝位置情報などは残らない ----------
+const MAX_PHOTOS = 3, PHOTO_EDGE = 1280, PHOTO_MAX_BYTES = 2000000;
+async function shrinkPhoto(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const k = Math.min(1, PHOTO_EDGE / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(bmp.width * k)); cv.height = Math.max(1, Math.round(bmp.height * k));
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); // 透明な所は白に
+  g.drawImage(bmp, 0, 0, cv.width, cv.height);
+  bmp.close && bmp.close();
+  for (const q of [0.85, 0.75, 0.6, 0.45]) {
+    const url = cv.toDataURL('image/jpeg', q);
+    const b64 = url.slice(url.indexOf(',') + 1);
+    if (b64.length * 3 / 4 <= PHOTO_MAX_BYTES) return { b64, url };
+  }
+  throw new Error('too_big');
+}
+function photoFold() {
+  const thumbs = h('div', { class: 'photoThumbs' });
+  const msg = h('div', { class: 'notice', role: 'status' });
+  const input = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, 'aria-label': '参考の写真を選ぶ' });
+  const pick = h('button', { type: 'button', class: 'thin', onclick: () => input.click() }, '写真を選ぶ');
+  const draw = () => {
+    thumbs.replaceChildren(...photoDrafts.map((ph, n) => h('figure', { class: 'photoThumb' },
+      h('img', { src: ph.url, alt: `参考の写真${n + 1}` }),
+      h('button', { type: 'button', class: 'thin', onclick: () => { photoDrafts.splice(n, 1); draw(); } }, '外す'))));
+    pick.disabled = photoDrafts.length >= MAX_PHOTOS;
+    pick.textContent = !photoDrafts.length ? '写真を選ぶ' : photoDrafts.length >= MAX_PHOTOS ? `${MAX_PHOTOS}枚まで選びました` : `写真を足す（あと${MAX_PHOTOS - photoDrafts.length}枚）`;
+  };
+  input.addEventListener('change', async () => {
+    const files = [...input.files];
+    input.value = '';
+    msg.textContent = '';
+    const room = MAX_PHOTOS - photoDrafts.length;
+    if (files.length > room) msg.textContent = `写真は${MAX_PHOTOS}枚までです。はじめの${room}枚だけ使います。`;
+    pick.disabled = true;
+    for (const f of files.slice(0, room)) {
+      try { photoDrafts.push(await shrinkPhoto(f)); }
+      catch (e) { msg.textContent = '読めない写真がありました。ほかの写真にしてください。'; }
+    }
+    draw();
+  });
+  draw();
+  return h('details', { class: 'fold plain photoFold', open: photoDrafts.length > 0 },
+    h('summary', {}, '参考の写真を足す（なくても作れます）'),
+    h('p', { class: 'notice' }, '人の顔や住所が写った写真は使わないでください。'),
+    h('p', { class: 'notice' }, `道具・現場・材料の写真を${MAX_PHOTOS}枚まで。Claudeが形や色の参考にします。`),
+    input, thumbs, h('div', { class: 'row' }, pick), msg);
+}
 
 // ---------- 声で入れる（kabi と同じ）----------
 function voiceFor(ta, onChange) {
@@ -429,9 +481,11 @@ function showIntake(i) {
       if (words.stopped) { put(msg, stopBox(words)); next.disabled = false; return; }
       if (i < STATE.intake.length - 1) return showIntake(i + 1);
       try {
-        const res = await post('/api/start', drafts);
+        const body = photoDrafts.length ? { ...drafts, photos: photoDrafts.map(x => x.b64) } : drafts;
+        const res = await post('/api/start', body);
         if (res.stopped) { put(msg, stopBox(res)); next.disabled = false; return; }
         drafts.job = drafts.work = drafts.looks = '';
+        photoDrafts = [];
         screen = '';
         openProject(res.id);
       } catch (e) {
@@ -444,7 +498,7 @@ function showIntake(i) {
       h('h1', {}, item.q), ta, msg,
       STATE.test && h('div', { class: 'row' }, h('button', { class: 'thin', onclick: () => { ta.value = STATE.test_answers.intake[item.key]; ta.dispatchEvent(new Event('input', { bubbles: true })); } }, '試験の答えを入れる')),
       h('div', { class: 'row' }, next, voice.button, i > 0 && h('button', { class: 'thin', onclick: () => showIntake(i - 1) }, '前へ戻る')),
-      voice.note);
+      voice.note, i === STATE.intake.length - 1 && photoFold());
     snap(4 + 4 * i);
     ta.focus();
   });
@@ -506,6 +560,7 @@ function screenReview() {
     h('div', { class: 'kicker' }, '答えの見直し'),
     h('h1', {}, 'この答えをもとに作ります。'),
     h('p', { class: 'mute' }, '直したい所があれば、ここで書き直してください。作るのに数分かかります。'),
+    P.photos ? h('p', { class: 'small mute' }, `参考の写真${P.photos}枚も、形や色の参考にClaudeへ見せます。`) : null,
     h('div', { class: 'answers' },
       STATE.intake.map(i => field(i.q, P.intake[i.key] || '', { key: i.key })),
       P.qa.map((q, idx) => field(q.q, q.a, { index: idx }))),
