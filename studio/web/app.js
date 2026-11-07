@@ -298,7 +298,7 @@ function makeWall(host, { labels = false, names = null } = {}) {
   };
 }
 // はじめの画面：津軽塗の「模様」と「奥の仕事」をつまみで見比べる
-const SAMPLE_NOTE = '見本。公開資料から作った例。職人さんの確認はこれから';
+const SAMPLE_NOTE = '見本です。公開資料から作成';
 const SHELF = [
   { id: 'sakan', name: '左官の土壁' },
   { id: 'tsugite', name: '柱の継ぎ手' },
@@ -310,46 +310,50 @@ function openSample(id) { history.pushState(null, '', '/?mihon=' + id); showSamp
 function sampleLink(id, attrs, ...kids) {
   return h('a', { href: '/?mihon=' + id, ...attrs, onclick: e => { e.preventDefault(); openSample(id); } }, ...kids);
 }
-function moyouStage() {
+// 画面いっぱいの津軽塗。指やマウスの動きに線がついてくる
+function moyouStage(...over) {
+  const left = h('div', { class: 'moyouTag' }, 'お客さんが見る模様'), right = h('div', { class: 'moyouTag right' }, 'その奥の仕事');
   const stage = h('div', { class: 'moyouStage' },
     h('img', { class: 'moyouPic', src: '/home/tsugaru_moyou.jpg', alt: '津軽塗の模様が出た丸盆と椀（見本の絵）' }),
     h('img', { class: 'moyouPic oku', src: '/home/tsugaru_oku.jpg', alt: '同じ塗りの断面。色の層が重なっている（見本の絵）' }),
-    h('i', { class: 'moyouLine' }),
-    h('div', { class: 'moyouTag' }, 'お客さんが見る模様'),
-    h('div', { class: 'moyouTag right' }, 'その奥の仕事'));
-  const range = h('input', { type: 'range', min: 0, max: 100, value: 50, class: 'peel', 'aria-label': '模様と奥の仕事を見比べる' });
-  const set = v => { stage.style.setProperty('--v', v + '%'); range.value = v; };
-  let stop = false;
-  range.addEventListener('input', () => { stop = true; set(+range.value); });
-  // 絵の上を指でなぞっても動く
-  const fromX = e => { const r = stage.getBoundingClientRect(); set(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100)); };
-  stage.addEventListener('pointerdown', e => { stop = true; stage.setPointerCapture(e.pointerId); fromX(e); });
-  stage.addEventListener('pointermove', e => { if (stage.hasPointerCapture(e.pointerId)) fromX(e); });
-  set(50);
-  // 一度だけ、動くものだと分かるように小さく揺れる
-  if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
-    const t0 = performance.now() + 1000, dur = 1800;
-    const step = now => {
-      if (stop || !stage.isConnected) return;
-      const x = (now - t0) / dur;
-      if (x >= 1) return set(50);
-      if (x > 0) set(Math.round(50 + Math.sin(x * Math.PI * 2) * 16));
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-  return h('div', { class: 'moyou' }, stage,
-    h('div', { class: 'moyouBar' }, h('span', {}, '模様'), range, h('span', {}, '奥の仕事')),
-    h('p', { class: 'sampleNote' }, '津軽塗の', SAMPLE_NOTE, '。器の形と色は、説明のために描いた絵です。', sampleLink('tsugaru', { class: 'sampleOpen' }, '3Dで開いて見る')));
+    h('i', { class: 'moyouShade' }),
+    h('i', { class: 'moyouLine' }, h('b', { class: 'moyouGrip' })),
+    left, right);
+  const range = h('input', { type: 'range', min: 0, max: 100, value: 58, class: 'peel', 'aria-label': '模様と奥の仕事を見比べる' });
+  const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
+  let now = still ? 58 : 100, goal = 58, raf = 0, last = 0;
+  const paint = v => {
+    stage.style.setProperty('--v', v.toFixed(2) + '%');
+    left.classList.toggle('off', v < 26);
+    right.classList.toggle('off', v > 80);
+    range.value = Math.round(v);
+  };
+  const run = t => {
+    raf = 0;
+    if (!stage.isConnected) return;
+    now += (goal - now) * (1 - Math.exp(-Math.min(t - last, 400) / 130)); // 画面の速さに関係なく同じ時間で追いつく
+    last = t;
+    if (Math.abs(goal - now) < .05) now = goal; else raf = requestAnimationFrame(run);
+    paint(now);
+  };
+  const to = (v, jump) => { goal = v; if (jump || still) { now = v; paint(v); } else if (!raf) { last = performance.now(); raf = requestAnimationFrame(run); } };
+  const fromX = e => { const r = stage.getBoundingClientRect(); to(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100); };
+  range.addEventListener('input', () => to(+range.value, true));
+  stage.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || stage.hasPointerCapture(e.pointerId)) fromX(e); });
+  stage.addEventListener('pointerdown', e => { if (e.target.closest('a,button') || e.pointerType === 'mouse') return; stage.setPointerCapture(e.pointerId); fromX(e); });
+  paint(now);
+  // 開いた瞬間に一度だけ、奥の仕事から模様へ線が走る
+  if (!still) setTimeout(() => to(58), 350);
+  stage.append(range, ...over);
+  return stage;
 }
 function shelf() {
   return h('section', { class: 'shelf' },
-    h('h2', {}, 'ほかの仕事の見本'),
-    h('p', { class: 'mute small' }, 'どれも時間をかけて作り込んだ見本です。道具が作るページと同じ見た目になるとは限りません。'),
+    h('div', { class: 'shelfHead' }, h('h2', {}, 'ほかの見本'),
+      h('p', {}, '手をかけて作った見本です。道具が作るページとは見た目が違います。')),
     h('div', { class: 'shelfRow' }, SHELF.map(x => sampleLink(x.id, { class: 'shelfItem' },
-      h('img', { src: '/home/' + x.id + '.jpg', alt: '', loading: 'lazy' }),
-      h('b', {}, x.name),
-      h('span', { class: 'shelfNote' }, SAMPLE_NOTE)))));
+      h('span', { class: 'shelfPic' }, h('img', { src: '/home/' + x.id + '.jpg', alt: '', loading: 'lazy' })),
+      h('span', {}, x.name)))));
 }
 // 見本は枠の中で開く。「もどる」でいつでもはじめの画面へ
 function showSample(id) {
@@ -361,12 +365,18 @@ function showSample(id) {
     view.className = 'sample';
     put(view, h('div', { class: 'sampleTop' },
       h('button', { class: 'sampleBack', onclick: () => { history.pushState(null, '', '/'); screen = ''; showHome(); } }, '← もどる'),
-      h('div', { class: 'sampleLabel' }, h('b', {}, SAMPLE_NAMES[id]), ' ', SAMPLE_NOTE)),
+      h('div', { class: 'sampleLabel' }, h('b', {}, SAMPLE_NAMES[id]))),
       h('iframe', { class: 'sampleFrame', src: '/mihon/' + id + '/', title: SAMPLE_NAMES[id] + 'の見本' }));
   });
 }
 
 // ---------- はじめ ----------
+// 黒い漆の画面から、質問の紺へ溶けて入る
+function toNavy() {
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return showIntake(0);
+  view.append(h('div', { class: 'homeVeil' }));
+  setTimeout(() => showIntake(0), 500);
+}
 async function showHome() {
   snap(0);
   clearTimeout(timer);
@@ -379,16 +389,21 @@ async function showHome() {
     view.className = 'home';
     const lost = workLost && errBox('サーバーが再起動して、作りかけが消えました。すみません、もう一度はじめてください。');
     workLost = false;
-    put(view, lost, moyouStage(),
+    put(view, lost, moyouStage(
       h('div', { class: 'homeGo' },
-        h('div', {},
-          h('h1', {}, h('span', {}, '見えない手間を、'), h('span', {}, '見える形に。')),
-          h('p', { class: 'lead' }, 'いくつか質問に答えるだけで、あなたの仕事の奥を3Dのページにします。'),
-          h('p', { class: 'mute small' }, '文字でも声でも答えられます。言っていないことは書きません。分からない所は「ここは職人に確認」と出します。')),
-        h('div', { class: 'homeBtn' }, blocked && errBox(STATE.no_key_message),
-          h('button', { class: 'main', disabled: blocked, onclick: () => showIntake(0) }, 'はじめる'))),
+        h('h1', {}, h('span', {}, '見えない手間を、'), h('span', {}, '見える形に。')),
+        h('p', { class: 'lead' }, 'いくつか質問に答えるだけで、あなたの仕事の奥を3Dのページにします。'),
+        blocked && errBox(STATE.no_key_message),
+        h('div', { class: 'homeBtn' },
+          h('button', { class: 'main', disabled: blocked, onclick: toNavy }, 'はじめる'),
+          sampleLink('tsugaru', { class: 'sampleOpen' }, 'この見本を3Dで見る'))),
+      h('p', { class: 'sampleNote' }, '津軽塗。', SAMPLE_NOTE)),
+      h('section', { class: 'homeWays' },
+        h('div', {}, h('h2', {}, '答える'), h('p', {}, '文字でも声でも答えられます。')),
+        h('div', {}, h('h2', {}, '3Dになる'), h('p', {}, '言っていないことは書きません。分からない所は「ここは職人に確認」と出します。')),
+        h('div', {}, h('h2', {}, '直す'), h('p', {}, '違う所は、言葉で伝えれば何回でも直せます。'))),
       shelf(),
-      list.length ? h('div', {}, h('h2', { style: 'margin-top:44px' }, '前に作ったもの'),
+      list.length ? h('div', { class: 'homePast' }, h('h2', {}, '前に作ったもの'),
         h('ul', { class: 'list' }, list.map(x => h('li', {}, h('a', { href: '/?id=' + x.id, onclick: e => { e.preventDefault(); openProject(x.id); } },
           h('span', {}, x.title || '（名前なし）', ' ', h('span', { class: 'mute small' }, x.job)),
           h('span', { class: 'mute small' }, stageWord(x.stage))))))) : null);
@@ -557,7 +572,7 @@ function updateProgress() {
   if (!j || !prog.title) return;
   const round = j.round || 1;
   const words = {
-    script: ['作っています', '台本を書いています'], scene: ['作っています', '3Dの物を作っています'],
+    script: ['作っています', '台本を書いています'], scene: ['作っています', '目に見えないを形にしています'],
     preflight: [`確かめています（${round}回目）`, '言葉と形を見ています'], check: [`確かめています（${round}回目）`, 'ページを動かして、画面を撮っています'],
     review: [`確かめています（${round}回目）`, 'Claudeが画面を見ています'], judge: [`確かめています（${round}回目）`, '結果をまとめています'],
     fix: ['直しています', '見つけた問題を直しています'], paused: ['止まっています', '途中で止まりました'], failed: ['止まりました', 'ページは作れませんでした'],

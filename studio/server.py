@@ -57,7 +57,7 @@ SAMPLE_CSP = ("default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdeli
               "style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src blob:; "
               "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
 STAGE_NAMES = {
-    "script": "台本を書いています", "scene": "3Dの物を作っています", "preflight": "言葉と形を確かめています",
+    "script": "台本を書いています", "scene": "目に見えないを形にしています", "preflight": "言葉と形を確かめています",
     "check": "確かめています", "review": "確かめています", "judge": "確かめています", "fix": "直しています",
     "paused": "止まっています", "done": "できあがり", "failed": "止まりました",
 }

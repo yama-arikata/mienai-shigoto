@@ -313,11 +313,11 @@ const laceM=new THREE.MeshStandardMaterial({map:laceTex,color:0xffffff,transpare
 const curtains=[];
 function makeCurtain(cx,w,h,top,z,nx,ny,mat,f,amp,cast){const g=new THREE.PlaneGeometry(w,h,nx,ny).translate(0,-h/2,0),q=g.attributes.position,seed=rnd(40);
  for(let i=0;i<q.count;i++){const x=q.getX(i),k=-q.getY(i)/h,a=amp*(.62+.6*k);q.setZ(i,(Math.sin(x*f+pn3(x*2.2,k*1.4,seed)*1.5)+Math.sin(x*f*.47+seed)*.45)*a);}
- g.computeVertexNormals();const m=new THREE.Mesh(g,mat);m.position.set(cx,top,z);m.castShadow=cast;m.receiveShadow=true;scene.add(m);const c={m,g,base:new Float32Array(q.array),h,seed,moved:false,x0:cx,wk:mat===laceM?.26:.72};curtains.push(c);return c;}
+ g.computeVertexNormals();const m=new THREE.Mesh(g,mat);m.position.set(cx,top,z);m.castShadow=cast;m.receiveShadow=true;scene.add(m);const c={m,g,base:new Float32Array(q.array),h,seed,moved:false,x0:cx,wk:mat===laceM?.2:.72};curtains.push(c);return c;}
 makeCurtain(WX-WW/2-.2,.8,3.72,3.86,RZ0+.27,56,14,drapeM,21,.03,true);makeCurtain(WX+WW/2+.2,.8,3.72,3.86,RZ0+.27,56,14,drapeM,21,.03,true);
 makeCurtain(WX-WW/4-.05,1.08,3.7,3.85,RZ0+.17,56,16,laceM,34,.022,false);makeCurtain(WX+WW/4+.05,1.08,3.7,3.85,RZ0+.17,56,16,laceM,34,.022,false);
 function windCurtains(t,wind){for(const c of curtains){if(wind<.002&&!c.moved)continue;c.moved=wind>=.002;const q=c.g.attributes.position,b=c.base;for(let i=0;i<q.count;i++){const x=b[i*3],y=b[i*3+1],z=b[i*3+2],k=-y/c.h,w=wind*k*k;
-   q.setXYZ(i,x+w*.14*Math.sin(t*1.1+k*2.+c.seed),y+w*.32*(.5+.5*Math.sin(t*1.3+x*1.6+c.seed)),z+c.wk*w*(.72+.42*Math.sin(t*1.7+x*2.1+k*3.2+c.seed)+.2*Math.sin(t*3.4+x*5.2+k*6.+c.seed)));}
+   q.setXYZ(i,x+w*.14*Math.sin(t*1.1+k*2.+c.seed),y+w*.32*(.5+.5*Math.sin(t*1.3+x*1.6+c.seed)),z+c.wk*w*(.72+.42*Math.sin(t*1.7+x*2.1+k*3.2+c.seed)+.2*Math.sin(t*3.4+x*5.2+k*6.+c.seed))+(c.wk>.5?.2*w:0));}
   q.needsUpdate=true;c.g.computeVertexNormals();}}
 addBox(3.9,.035,.035,WX,3.88,RZ0+.27,new THREE.MeshStandardMaterial({color:0x4a463f,metalness:.7,roughness:.35}));
 addBox(3.9,.03,.03,WX,3.88,RZ0+.17,new THREE.MeshStandardMaterial({color:0xbdbdb6,metalness:.7,roughness:.35}));
@@ -743,7 +743,7 @@ const lid=new THREE.Group();scene.add(lid);{floorPiece(HX0+.015,HX1-.015,HZ0+.01
 const thinHose=new DynTube(60,8,.026,hn,1);under.add(thinHose.mesh);
 // 床下の人
 const CZ=1.48;
-const crawlJ=(()=>{const J={hip:V3(0,.36,0),waist:V3(0,.4,-.36),chest:V3(0,.5,-.82),upper:V3(0,.58,-1.03),neck:V3(0,.66,-1.16),headB:V3(0,.7,-1.2),headC:V3(0,.8,-1.36),headTop:V3(0,.9,-1.46),hoodB0:V3(0,.92,-1.25),hoodB1:V3(0,.95,-1.42),seat:V3(0,.46,.1),
+const crawlJ=(()=>{const J={hip:V3(0,.36,0),waist:V3(0,.4,-.36),chest:V3(0,.5,-.82),upper:V3(0,.58,-1.03),neck:V3(0,.66,-1.16),headB:V3(0,.7,-1.2),headC:V3(0,.8,-1.36),headTop:V3(0,.9,-1.46),hoodB0:V3(0,.92,-1.25),hoodB1:V3(0,.95,-1.42),seat:V3(0,.385,.1),
   shR:V3(.345,.6,-1.04),shL:V3(-.345,.6,-1.04),hpR:V3(.16,.3,.08),hpL:V3(-.17,.3,.06),knR:V3(.31,.2,.86),knL:V3(-.44,.21,.72),anR:V3(.35,.23,1.6),anL:V3(-.54,.36,1.38),toR:V3(.38,.09,1.76),toL:V3(-.58,.18,1.56)};
  J.face=V3(0,.72,-1.6);J.faceR=.2;
  const T_R=V3(-.1,-.02,-1).normalize(),qR=basisQ(T_R,V3(.5,.85,0)),G_R=V3(.29,.34,-1.98);J.G_R=G_R;J.qR=qR;J.wrR=G_R.clone().add(WRIST_G.clone().applyQuaternion(qR));J.elR=IK2(J.shR,J.wrR,.62,.6,V3(.6,-.8,.1));
