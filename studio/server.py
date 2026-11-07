@@ -81,6 +81,21 @@ def now():
     return time.time()
 
 
+# 費用の見積もりに使う単価（USD / 100万トークン）。claude-api スキルの表（2026-10-06 時点）で確かめた値だけを書く。
+# キャッシュ書き込みは5分のもの（入力の1.25倍）。表に無いモデルは「単価未確認」としてトークン数だけ残す。
+PRICES = {"claude-opus-5-5": {"input_tokens": 4.00, "output_tokens": 20.00, "cache_creation_input_tokens": 5.00, "cache_read_input_tokens": 0.20}}
+PRICE_SOURCE = "claude-api スキルの料金表（2026-10-06時点）: Opus 5.5 入力$4・出力$20・キャッシュ読み$0.20／100万トークン、キャッシュ書き(5分)は入力の1.25倍=$5"
+TOKEN_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+_CTX = threading.local()  # いま動いているスレッドが、どのプロジェクトの仕事か
+
+
+def usd_of(model, tokens):
+    price = PRICES.get(model or "")
+    if not price:
+        return None
+    return round(sum(tokens.get(k, 0) * price[k] for k in TOKEN_KEYS) / 1_000_000, 4)
+
+
 def safe_note(text, fallback="書けない言葉を含む問題でした"):
     """画面に出す短い文。止める言葉をそのまま出さない。"""
     text = str(text or "").strip()
@@ -285,7 +300,8 @@ class Engine:
     FIX_RUN = ("fixing", "fix_repair")
 
     def __init__(self, store, ask, publisher, max_rounds=MAX_ROUNDS):
-        self.store, self.ask, self.publisher, self.max_rounds = store, ask, publisher, max_rounds
+        self.store, self.publisher, self.max_rounds = store, publisher, max_rounds
+        self._raw_ask, self.ask = ask, self._ask_counted
         self.lock = threading.Lock()
         self.running, self.again = set(), set()
         self.live = {}
@@ -299,7 +315,70 @@ class Engine:
             self.running.add(pid)
         threading.Thread(target=self._run, args=(pid,), daemon=True).start()
 
+    # ---------- 使ったトークン（usage.json。キーや本文は書かない）----------
+    def _ask_counted(self, purpose, *args, **kwargs):
+        pid, t0, err = getattr(_CTX, "pid", None), time.time(), None
+        try:
+            return self._raw_ask(purpose, *args, **kwargs)
+        except Exception as exc:
+            err = type(exc).__name__
+            raise
+        finally:
+            usage = claude.take_usage()
+            if pid:
+                try:
+                    self.record_usage(pid, purpose, kwargs.get("effort"), usage, time.time() - t0, err)
+                except Exception:
+                    traceback.print_exc()
+
+    def record_usage(self, pid, purpose, effort, usage, seconds, err):
+        with self.store.lock(pid):
+            u = self.store.get_json(pid, "usage.json") or {"note": "Claude を呼んだ回ごとのトークン数。キーや本文は書いていません。", "price_source": PRICE_SOURCE, "calls": [], "builds": []}
+            tokens = {k: int((usage or {}).get(k) or 0) for k in TOKEN_KEYS}
+            model = (usage or {}).get("model") or ""
+            call = {"at": round(now(), 1), "purpose": purpose, "effort": (usage or {}).get("effort") or effort, "model": model or ("試験（Claudeを呼んでいない）" if self.store.test else ""),
+                    **tokens, "seconds": round(seconds, 1), "attempts": (usage or {}).get("attempts", 0), "usd": usd_of(model, tokens)}
+            if err:
+                call["error"] = err
+            u["calls"].append(call)
+            self._usage_sum(u)
+            self.store.put_json(pid, "usage.json", u)
+
+    @staticmethod
+    def _usage_sum(u):
+        def add(box, c):
+            for k in TOKEN_KEYS:
+                box[k] = box.get(k, 0) + c.get(k, 0)
+            box["calls"] = box.get("calls", 0) + 1
+            box["seconds"] = round(box.get("seconds", 0) + c.get("seconds", 0), 1)
+            if c.get("usd") is None:
+                box["unpriced_calls"] = box.get("unpriced_calls", 0) + (1 if any(c.get(k) for k in TOKEN_KEYS) else 0)
+            else:
+                box["usd"] = round(box.get("usd", 0) + c["usd"], 4)
+        by, total = {}, {}
+        for c in u["calls"]:
+            add(by.setdefault(c["purpose"], {}), c)
+            add(total, c)
+        u["by_purpose"], u["total"] = by, total
+        if total.get("unpriced_calls"):
+            u["usd_note"] = "単価未確認のモデルの回があります。その回はトークン数のみで、usd に入っていません"
+
+    def usage_finish(self, pid, job):
+        """1本作り終えたとき：この作りの間の回だけを、工程別と合計にまとめて残す。"""
+        with self.store.lock(pid):
+            u = self.store.get_json(pid, "usage.json") or {"calls": [], "builds": [], "price_source": PRICE_SOURCE}
+            st, en = job.get("started") or 0, job.get("ended") or now()
+            part = {"calls": [c for c in u["calls"] if st - 1 <= c["at"] <= en + 1]}
+            self._usage_sum(part)
+            interview = [c for c in u["calls"] if c["purpose"] == "question"]
+            u.setdefault("builds", []).append({"started": round(st, 1), "ended": round(en, 1), "build_seconds": round(en - st, 1), "result": job.get("stage"),
+                                               "scene_effort": brain.SCENE_EFFORT, "clay": brain.CLAY, "by_purpose": part["by_purpose"], "total": part["total"],
+                                               "interview_calls_before": len(interview)})
+            self._usage_sum(u)
+            self.store.put_json(pid, "usage.json", u)
+
     def _run(self, pid):
+        _CTX.pid = pid
         try:
             while True:
                 self._advance(pid)
@@ -363,6 +442,7 @@ class Engine:
     # ---------- 聞き取り ----------
     def ask_next(self, pid):
         def work():
+            _CTX.pid = pid
             try:
                 p = self.store.load(pid)
                 if len(p["qa"]) >= brain.MAX_QUESTIONS:
@@ -601,11 +681,13 @@ class Engine:
                 self.set_stage(p, "failed")
                 p["stage"] = "failed"
                 j["error"] = "動くページになりませんでした。直しても動かなかったので、ここで止めました。"
+                self.usage_finish(pid, j)
                 return
             p["current"] = best["version"]
             p["history"] = [best["version"]]
             p["stage"] = "ready"
             self.set_stage(p, "done")
+            self.usage_finish(pid, j)
             left = len(j["remaining"])
             if left:
                 self.log(p, "left", f"直しきれなかった問題が{left}つ残っています。")

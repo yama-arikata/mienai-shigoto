@@ -4,6 +4,7 @@
 """
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -12,6 +13,23 @@ API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2026-10-21"
 MODEL = "claude-opus-5-5"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_TL = threading.local()  # 呼んだスレッドごとに、最後の呼び出しのトークン数を置く（キーや本文は置かない）
+USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def take_usage():
+    """このスレッドで最後に呼んだ ask のトークン数を返して消す。無ければ None。"""
+    u = getattr(_TL, "usage", None)
+    _TL.usage = None
+    return u
+
+
+def _add_usage(total, part):
+    for k in USAGE_KEYS:
+        total[k] = total.get(k, 0) + int(part.get(k) or 0)
+    return total
+
+
 NO_KEY = "APIキーが入っていないので、Claude に聞けません。ここで止まっています。やまさんに ANTHROPIC_API_KEY を入れて、サーバーを起動し直してもらってください。"
 
 
@@ -27,7 +45,7 @@ def has_key():
 
 def _read_stream(res, on_text):
     text, stop, model, err = [], None, MODEL, None
-    event = None
+    event, usage = None, {}
     for raw in res:
         line = raw.decode("utf-8", "replace").rstrip("\r\n")
         if line.startswith("event:"):
@@ -42,6 +60,7 @@ def _read_stream(res, on_text):
         kind = data.get("type") or event
         if kind == "message_start":
             model = (data.get("message") or {}).get("model") or model
+            usage.update({k: v for k, v in ((data.get("message") or {}).get("usage") or {}).items() if k in USAGE_KEYS and isinstance(v, int)})
         elif kind == "content_block_start":
             block = data.get("content_block") or {}
             if block.get("type") == "fallback":  # 別のモデルへ渡ったら、そこまでの文字は捨てる
@@ -58,9 +77,11 @@ def _read_stream(res, on_text):
                     on_text(piece, False)
         elif kind == "message_delta":
             stop = (data.get("delta") or {}).get("stop_reason") or stop
+            # message_delta の usage は累計。来た項目だけ上書きする
+            usage.update({k: v for k, v in (data.get("usage") or {}).items() if k in USAGE_KEYS and isinstance(v, int)})
         elif kind == "error":
             err = (data.get("error") or {})
-    return "".join(text), stop, model, err
+    return "".join(text), stop, model, err, usage
 
 
 def ask(purpose, system, user, schema, effort="medium", max_tokens=32000, on_text=None):
@@ -77,10 +98,17 @@ def ask(purpose, system, user, schema, effort="medium", max_tokens=32000, on_tex
         "content-type": "application/json", "x-api-key": key, "accept": "text/event-stream",
         "anthropic-version": API_VERSION, "anthropic-beta": FALLBACK_BETA,
     })
+    spent, t0 = {"attempts": 0}, time.time()
+    _TL.usage = None
     for attempt in range(2):
         try:
             with urllib.request.urlopen(req, timeout=300) as res:
-                text, stop, model, err = _read_stream(res, on_text)
+                text, stop, model, err, usage = _read_stream(res, on_text)
+            # 途中で止まって取り直した分も、使ったトークンとして足しておく
+            _add_usage(spent, usage)
+            spent["attempts"] += 1
+            spent.update({"model": model, "effort": effort, "seconds": round(time.time() - t0, 1)})
+            _TL.usage = dict(spent)
             if err:
                 if err.get("type") in ("overloaded_error", "api_error", "rate_limit_error") and attempt == 0:
                     if on_text:

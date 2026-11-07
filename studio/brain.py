@@ -4,6 +4,7 @@ Claude が書くのは「場面の文」と「物と動きのコード」だけ�
 スクロールや字幕などの土台は kit/ の動く実装を使う。
 """
 import json
+import os
 import pathlib
 import re
 import unicodedata
@@ -32,6 +33,22 @@ HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_TITLE, MAX_BODY, MAX_CODE, MAX_IMG = 60, 220, 90000, 40
 # 考える深さ。完成まで5分程度に収めるため、深く考えるのは台本（絵の計画）だけ
 SCENE_EFFORT, FIX_EFFORT, REVIEW_EFFORT = "medium", "high", "medium"
+# 試験で場面のコードの考える深さだけ上げたいとき: STUDIO_SCENE_EFFORT=high（既定は上の medium のまま）
+_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+if (os.environ.get("STUDIO_SCENE_EFFORT") or "").strip() in _EFFORTS:
+    SCENE_EFFORT = os.environ["STUDIO_SCENE_EFFORT"].strip()
+# 粘土の部品（K.clay）を Claude に教えるか。STUDIO_CLAY=0 で今までどおり（粘土なし・人の形は作らない）
+CLAY = (os.environ.get("STUDIO_CLAY") or "1").strip() not in ("0", "off", "no", "false")
+_CLAY_BLOCK = re.compile(r"<!--clay-->(.*?)<!--/clay-->", re.S)
+_NOCLAY_BLOCK = re.compile(r"<!--noclay-->(.*?)<!--/noclay-->", re.S)
+
+
+def api_doc():
+    """Claude に渡す API.md。粘土あり／なしで、その部分だけ出し分ける。"""
+    text = (KIT / "API.md").read_text(encoding="utf-8")
+    if CLAY:
+        return _NOCLAY_BLOCK.sub("", _CLAY_BLOCK.sub(lambda m: m.group(1), text))
+    return _CLAY_BLOCK.sub("", _NOCLAY_BLOCK.sub(lambda m: m.group(1), text))
 
 
 class SpecError(Exception):
@@ -139,6 +156,7 @@ def interview_system():
 
 
 def script_system():
+    PEOPLE = ("人の形は、仕事を見せるのに要るときだけ、顔を作らずに出してよい（手・腕・作業着の人など）。主役は物と見えない仕事のまま。" if CLAY else "人の形は作らない。")
     return f"""あなたは職人さんの話を「見えない仕事の3Dページ」の台本にします。台本は場面（chapters）の並びです。
 
 作り方:
@@ -157,7 +175,7 @@ def script_system():
 - hero: 主役の物と、本物らしく見える形の特徴。「箱型でよい」「単純な形でよい」とは書かない。
 - invisible: お客さんに見えないもの（におい・しみ・湿り・熱・流れ・中の層・裏側など）を、どんな形と色で見せるか。
 - showpiece: いちばんの見せ場の場面IDと、そこで画面に何が起きるか。
-- scene_plan: 場面ごとに、何を見せて、どう変わるか（カメラの寄り引きも）。人の形は作らない。
+- scene_plan: 場面ごとに、何を見せて、どう変わるか（カメラの寄り引きも）。{PEOPLE}
 
 答えが少ないとき（飛ばしが多いとき）:
 - 3Dの見せ場を弱くしない。最初の3つの答え（仕事・見せたい仕事・お客さんが見ている所）と短い答えだけでも、「見えないものを大きく見せる場面」を必ず1つ作る。場面の数も4つ以上にする。
@@ -171,7 +189,7 @@ def script_system():
 
 
 def scene_system():
-    api = (KIT / "API.md").read_text(encoding="utf-8")
+    api = api_doc()
     example = (KIT / "example.js").read_text(encoding="utf-8")
     return f"""あなたは「見えない仕事の3Dページ」の、物と動きを書く担当です。台本（場面の文）はもう決まっています。土台（スクロール・字幕・カメラの計算・照明）はできているので、物と動きだけを書きます。
 
@@ -204,7 +222,7 @@ def scene_system():
 
 
 def repair_system():
-    api = (KIT / "API.md").read_text(encoding="utf-8")
+    api = api_doc()
     return f"""「見えない仕事の3Dページ」を確かめたら、問題が見つかりました。問題の一覧を読んで、**その問題だけ**を直します。
 
 返すもの:
@@ -254,7 +272,7 @@ def review_system():
 
 
 def fix_system():
-    api = (KIT / "API.md").read_text(encoding="utf-8")
+    api = api_doc()
     return f"""職人本人が、できた3Dページを見ながら「ここは違う」と言いました。本人の言葉どおりに直す案を作ります。
 
 変えられるもの（changes）:

@@ -28,6 +28,85 @@ function pillowGeo(sx,sy,sz,r,puff,axis=1){const g=new RoundedBoxGeometry(sx,sy,
  for(let i=0;i<P.count;i++){const v=[P.getX(i),P.getY(i),P.getZ(i)],n1=v[a1]/h[a1],n2=v[a2]/h[a2];v[axis]+=Math.sign(v[axis])*puff*(1-n1**4)*(1-n2**4);P.setXYZ(i,v[0],v[1],v[2]);}g.computeVertexNormals();return g;}
 const pillow=(sx,sy,sz,r,puff,mat,o={})=>mesh(pillowGeo(sx,sy,sz,r,puff,o.axis??1),mat,o,'pillow');
 
+// ===== 粘土：玉・カプセル・楕円・角丸箱を、なめらかにくっつけて1つの塊にする =====
+// 距離の場（SDF）をなめらかに足し合わせ、格子で調べて面にする（surface nets）。面は場の上へ寄せ、法線は場の傾きから取る。
+// 作るのは1回だけ。毎フレーム作り直さない。
+const CLAY_KEYS=['ball','cap','ell','rbox'];
+function clayBlobs(list){if(!Array.isArray(list)||!list.length)bad('clay','[{ball:[x,y,z],r},{cap:[[x,y,z],[x,y,z]],r},...] を渡す');const out=[];
+ const one=(b,flip)=>{const k=CLAY_KEYS.find(k=>b[k]!==undefined);if(!k)bad('clay','1つずつ ball / cap / ell / rbox のどれかを書く');
+  const fx=a=>flip?[-a[0],a[1],a[2]]:a,q={kind:k,sub:!!b.sub,k:b.k,color:b.color?color(b.color,'clay'):null};
+  if(k==='ball'){q.c=fx(vec3('clay',b.ball));q.r=+b.r;if(!(q.r>0))bad('clay','ball には r（半径）を書く');q.bc=q.c;q.br=q.r;}
+  else if(k==='cap'){const pts=b.cap;if(!Array.isArray(pts)||pts.length<2)bad('clay','cap は [[x,y,z],[x,y,z]] のように点を2つ以上');q.p=pts.map(a=>fx(vec3('clay',a)));
+   const rs=Array.isArray(b.r)?b.r:pts.map(()=>b.r);if(rs.length!==pts.length||rs.some(r=>!(r>0)))bad('clay','cap の r は数字1つか、点と同じ数の数字');q.rs=rs.map(Number);
+   q.seg=[];for(let i=0;i<q.p.length-1;i++){const a=q.p[i],c=q.p[i+1],ba=[c[0]-a[0],c[1]-a[1],c[2]-a[2]],L2=ba[0]*ba[0]+ba[1]*ba[1]+ba[2]*ba[2]||1e-9;q.seg.push({a,ba,L2,r0:q.rs[i],r1:q.rs[i+1]});}
+   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];q.p.forEach((a,i)=>{for(let d=0;d<3;d++){mn[d]=Math.min(mn[d],a[d]-q.rs[i]);mx[d]=Math.max(mx[d],a[d]+q.rs[i]);}});q.bc=mn.map((v,d)=>(v+mx[d])/2);q.br=Math.hypot(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])/2;}
+  else if(k==='ell'){q.c=fx(vec3('clay',b.ell));q.rr=vec3('clay',b.r);if(q.rr.some(r=>!(r>0)))bad('clay','ell の r は [x半径,y半径,z半径]');q.bc=q.c;q.br=Math.max(...q.rr);}
+  else{q.c=fx(vec3('clay',b.rbox));q.h=vec3('clay',b.size).map(v=>v/2);q.r=Math.min(+b.r||0,...q.h);q.bc=q.c;q.br=Math.hypot(...q.h);}
+  out.push(q);};
+ for(const b of list){if(!b||typeof b!=='object')bad('clay','1つずつ {…} で書く');one(b,false);if(b.pair)one(b,true);}
+ if(out.length>120)bad('clay','玉やカプセルは1つの塊に120個まで');return out;}
+function clayDist(q,x,y,z){
+ if(q.kind==='ball')return Math.hypot(x-q.c[0],y-q.c[1],z-q.c[2])-q.r;
+ if(q.kind==='cap'){let best=1e9;for(const s of q.seg){const px=x-s.a[0],py=y-s.a[1],pz=z-s.a[2];let h=(px*s.ba[0]+py*s.ba[1]+pz*s.ba[2])/s.L2;h=h<0?0:h>1?1:h;const d=Math.hypot(px-s.ba[0]*h,py-s.ba[1]*h,pz-s.ba[2]*h)-(s.r0+(s.r1-s.r0)*h);if(d<best)best=d;}return best;}
+ if(q.kind==='ell'){const px=(x-q.c[0]),py=(y-q.c[1]),pz=(z-q.c[2]),r=q.rr;const k0=Math.hypot(px/r[0],py/r[1],pz/r[2]),k1=Math.hypot(px/(r[0]*r[0]),py/(r[1]*r[1]),pz/(r[2]*r[2]));return k1>1e-9?k0*(k0-1)/k1:-Math.min(...r);}
+ const qx=Math.abs(x-q.c[0])-q.h[0]+q.r,qy=Math.abs(y-q.c[1])-q.h[1]+q.r,qz=Math.abs(z-q.c[2])-q.h[2]+q.r;
+ return Math.hypot(Math.max(qx,0),Math.max(qy,0),Math.max(qz,0))+Math.min(Math.max(qx,qy,qz),0)-q.r;}
+function claySdf(B,K0,x,y,z){let a=1e9;for(const q of B){const k=q.k??K0;
+  if(!q.sub){if(Math.hypot(x-q.bc[0],y-q.bc[1],z-q.bc[2])-q.br>=a+k)continue;const d=clayDist(q,x,y,z);if(k<=0){if(d<a)a=d;continue;}const h=Math.max(k-Math.abs(a-d),0)/k;a=Math.min(a,d)-h*h*k*.25;}
+  else{const d=clayDist(q,x,y,z);if(k<=0){a=Math.max(a,-d);continue;}const h=Math.max(k-Math.abs(-d-a),0)/k;a=Math.max(a,-d)+h*h*k*.25;}}
+ return a;}
+function clayGeo(B,K0,o={}){const t0=performance.now();
+ let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9],minR=1e9;
+ for(const q of B){if(q.sub)continue;for(let d=0;d<3;d++){mn[d]=Math.min(mn[d],q.bc[d]-q.br);mx[d]=Math.max(mx[d],q.bc[d]+q.br);}minR=Math.min(minR,q.kind==='cap'?Math.min(...q.rs):q.kind==='ell'?Math.min(...q.rr):q.kind==='rbox'?Math.min(...q.h):q.r);}
+ if(mn[0]>mx[0])bad('clay','足す形（sub でないもの）が1つもありません');
+ const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]);
+ // 細かさ：いちばん長い向きを何マスに割るか。細い腕が消えないよう、いちばん細い所の太さが4マス（半径で2マス）になるまで自動で上げる（上限あり）
+ let res=Math.round(o.res||Math.min(phone?56:80,Math.max(40,Math.ceil(ext/(minR*.5)))));res=Math.max(16,Math.min(160,res));
+ let h=ext/res;const pad=2*h+K0*.25;for(let d=0;d<3;d++){mn[d]-=pad;mx[d]+=pad;}
+ let n=[0,1,2].map(d=>Math.ceil((mx[d]-mn[d])/h)+1);
+ if(n[0]*n[1]*n[2]>1.2e6){const f=Math.cbrt(1.2e6/(n[0]*n[1]*n[2]));h/=f;n=[0,1,2].map(d=>Math.ceil((mx[d]-mn[d])/h)+1);}
+ const [nx,ny,nz]=n,F=new Float32Array(nx*ny*nz),id=(i,j,k)=>i+nx*(j+ny*k);
+ // 面から遠い所は細かく調べない：4マスの塊の中心で測り、面が届かないなら塊ごと「中の距離の下限」で埋める
+ const BS=4,far=BS*h*.87+h*1.5;for(let bk=0;bk<nz;bk+=BS)for(let bj=0;bj<ny;bj+=BS)for(let bi=0;bi<nx;bi+=BS){const ei=Math.min(bi+BS,nx),ej=Math.min(bj+BS,ny),ek=Math.min(bk+BS,nz),ci=(bi+ei-1)/2,cj=(bj+ej-1)/2,ck=(bk+ek-1)/2;
+  const dc=claySdf(B,K0,mn[0]+ci*h,mn[1]+cj*h,mn[2]+ck*h);
+  if(Math.abs(dc)>far){const sg=Math.sign(dc),ad=Math.abs(dc);for(let k=bk;k<ek;k++)for(let j=bj;j<ej;j++)for(let i=bi;i<ei;i++)F[id(i,j,k)]=sg*Math.max(h,ad-Math.hypot(i-ci,j-cj,k-ck)*h);}
+  else for(let k=bk;k<ek;k++){const z=mn[2]+k*h;for(let j=bj;j<ej;j++){const y=mn[1]+j*h;for(let i=bi;i<ei;i++)F[id(i,j,k)]=claySdf(B,K0,mn[0]+i*h,y,z);}}}
+ // マスごとに面の点を1つ置く（符号が変わる辺の交点の平均）
+ const cid=new Int32Array((nx-1)*(ny-1)*(nz-1)).fill(-1),cix=(i,j,k)=>i+(nx-1)*(j+(ny-1)*k),P=[];
+ const E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]],C=[[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]],v=new Float32Array(8);
+ for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){let neg=0;for(let c=0;c<8;c++){v[c]=F[id(i+C[c][0],j+C[c][1],k+C[c][2])];if(v[c]<0)neg++;}if(neg===0||neg===8)continue;
+  let sx=0,sy=0,sz=0,m=0;for(const[a,b]of E){if((v[a]<0)===(v[b]<0))continue;const t=v[a]/(v[a]-v[b]);sx+=C[a][0]+(C[b][0]-C[a][0])*t;sy+=C[a][1]+(C[b][1]-C[a][1])*t;sz+=C[a][2]+(C[b][2]-C[a][2])*t;m++;}
+  cid[cix(i,j,k)]=P.length/3;P.push(mn[0]+(i+sx/m)*h,mn[1]+(j+sy/m)*h,mn[2]+(k+sz/m)*h);}
+ // 符号が変わる格子の辺ごとに、まわりの4マスの点で四角を張る
+ const I=[],quad=(a,b,c,d,flip)=>{if(a<0||b<0||c<0||d<0)return;if(flip){const t=b;b=d;d=t;}
+  const dx=(u,w)=>(P[u*3]-P[w*3])**2+(P[u*3+1]-P[w*3+1])**2+(P[u*3+2]-P[w*3+2])**2;if(dx(a,c)<dx(b,d))I.push(a,b,c,a,c,d);else I.push(a,b,d,b,c,d);};
+ for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const f0=F[id(i,j,k)]<0;
+  if(i<nx-1&&j>0&&k>0&&j<ny-1&&k<nz-1&&(F[id(i+1,j,k)]<0)!==f0)quad(cid[cix(i,j-1,k-1)],cid[cix(i,j,k-1)],cid[cix(i,j,k)],cid[cix(i,j-1,k)],!f0);
+  if(j<ny-1&&i>0&&k>0&&i<nx-1&&k<nz-1&&(F[id(i,j+1,k)]<0)!==f0)quad(cid[cix(i-1,j,k-1)],cid[cix(i-1,j,k)],cid[cix(i,j,k)],cid[cix(i,j,k-1)],!f0);
+  if(k<nz-1&&i>0&&j>0&&i<nx-1&&j<ny-1&&(F[id(i,j,k+1)]<0)!==f0)quad(cid[cix(i-1,j-1,k)],cid[cix(i,j-1,k)],cid[cix(i,j,k)],cid[cix(i-1,j,k)],!f0);}
+ // 点を本当の面の上へ寄せて、法線は場の傾きから取る（角ばらず、つるっとする）
+ const nv=P.length/3,N=new Float32Array(nv*3),e=h*.25,f=(x,y,z)=>claySdf(B,K0,x,y,z),iters=o.snap??1;
+ for(let s=0;s<nv;s++){let x=P[s*3],y=P[s*3+1],z=P[s*3+2],gx=0,gy=0,gz=0;
+  for(let it=0;it<=iters;it++){const d=f(x,y,z);gx=f(x+e,y,z)-d;gy=f(x,y+e,z)-d;gz=f(x,y,z+e)-d;const g2=(gx*gx+gy*gy+gz*gz)/(e*e);
+   if(it<iters&&g2>1e-6){const st=Math.max(-h*.6,Math.min(h*.6,d/g2))/e;x-=gx*st;y-=gy*st;z-=gz*st;}}
+  const L=Math.hypot(gx,gy,gz)||1;P[s*3]=x;P[s*3+1]=y;P[s*3+2]=z;N[s*3]=gx/L;N[s*3+1]=gy/L;N[s*3+2]=gz/L;}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.BufferAttribute(N,3));g.setIndex(I);
+ g.computeBoundingSphere();g.computeBoundingBox();
+ const ms=performance.now()-t0;g.userData.clay={ms:Math.round(ms*10)/10,res,cells:nx*ny*nz,verts:nv,tris:I.length/3,blobs:B.length};return g;}
+const CLAY_MAT={color:'#e9e6df',roughness:.48,metalness:0,envMapIntensity:.75};
+// 色ごとに別の塊にする（同じ色どうしはなめらかにくっつき、色の境目は形の交わりでくっきり分かれる）。
+// 小さい部品は小さい箱で調べるので、細かく作られる。
+function clay(list,mat,o={}){if(mat&&!mat.isMaterial&&typeof mat==='object'&&!Array.isArray(mat)){o=mat;mat=null;}
+ const t0=performance.now(),B=clayBlobs(list),K0=Math.max(0,o.smooth??.06),base=mat||std(CLAY_MAT),subs=B.filter(q=>q.sub&&!q.color),G=new Map();
+ for(const q of B){if(q.sub&&!q.color)continue;const key=q.color?'#'+q.color.getHexString():'';if(!G.has(key))G.set(key,[]);G.get(key).push(q);}
+ const parts=[];for(const[key,bs]of G){if(!bs.some(q=>!q.sub))continue;const g=clayGeo([...bs,...subs],K0,o);let m=base;if(key){m=cloneMat(base);if(m.color)m.color.set(key);}parts.push({g,m,key});}
+ if(!parts.length)bad('clay','足す形（sub でないもの）が1つもありません');
+ const st={ms:0,res:[],cells:0,verts:0,tris:0,blobs:B.length,parts:parts.length};
+ for(const{g}of parts){const c=g.userData.clay;st.res.push(c.res);st.cells+=c.cells;st.verts+=c.verts;st.tris+=c.tris;}
+ let r;if(parts.length===1)r=mesh(parts[0].g,parts[0].m,o,'clay');
+ else{r=group({at:o.at,rot:o.rot,scale:o.scale,name:o.name,parent:o.parent});for(const{g,m,key}of parts){const x=mesh(g,m,{parent:r,shadow:o.shadow,name:key?o.name:undefined},'clay');if(o.name)x.name=String(o.name);}}
+ st.ms=Math.round((performance.now()-t0)*10)/10;r.userData.clay=st;return r;}
+
 // 光のにじみ（窓・ライト・見えない物の目印）
 const softSprite=(c,op)=>new THREE.SpriteMaterial({map:softTex,color:new THREE.Color(c),transparent:true,opacity:op,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false});
 function glow(at,size=.6,c='#ffc98a',op=.6,o={}){const s=noRay(new THREE.Sprite(softSprite(c,op)));s.scale.setScalar(size);s.userData.fx=true;s.renderOrder=6;place(s,{at,parent:o.parent},'glow');return{obj:s,set(a){s.material.opacity=op*clamp(a);s.visible=a>.01;return this;}};}

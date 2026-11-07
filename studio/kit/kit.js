@@ -403,7 +403,7 @@ let lastP=-1;setInterval(()=>{if(recording)return;if(Math.abs(cur-lastP)>.002){l
 const K={THREE,scene,camera,V,rnd,ss,mix,clamp,seq,tex,speckle,
  std,metal,glass,emit,water,wood,surface,
  box,rbox,cyl,ball,plane,lathe,shape,tube,group,ground,wall,
- world,car,house,bottle,wheel,loft,pillow,strata,xray,cut,stain,wisp,flow,spray,glow,blob,
+ world,car,house,bottle,wheel,loft,pillow,clay,strata,xray,cut,stain,wisp,flow,spray,glow,blob,
  fade,dust,mist,ring,arrow,label,light,bg,fog,go,on,since,until,phone};
 let buildMs=0,ran=false;
 const q=new URLSearchParams(location.search);

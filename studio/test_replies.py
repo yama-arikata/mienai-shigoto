@@ -14,6 +14,7 @@
   小さい指摘 … 小さい指摘（low）だけで「合格」と言う → 不合格にして直させる
   灯油      … 答えが少ない車の見本（実際に飛ばしが多かった例）
   名札隠れ  … 名札の先が物に隠れる → Claudeの目と一緒に1回で直す
+  防護服    … 粘土（K.clay）で作った防護服の作業者の見本
 何も入れなければ、1回目は不合格 → 直して合格。
 """
 import json
@@ -99,6 +100,71 @@ return function(p,t){
  s1.set(since('inside')*go('inside',.4,.95));s2.set(since('inside')*go('inside',.5,1));
  const h=go('smell',0,.7);smell.set(h,h>0?1:0);smell2.set(go('smell',.2,.9),go('smell',.2,.5));
  b.visible=since('agent')>.01;
+};
+"""
+# 粘土（K.clay）の見本：防護服を着た作業者が噴霧器で薬剤を吹きつける。見せたい仕事に「防護服」と入れると通る（試験用の作りもの）
+SCRIPT_CLAY = {
+    "page_title": "防護服の作業",
+    "tag": "見えない仕事　防護服での吹きつけ（試験）",
+    "note": "試験の見本です。説明のための図で、形や大きさは実物と同じではありません",
+    "accent": "#9ad0ff", "night": "#14161a",
+    "chapters": [
+        {"id": "fuku", "title": "まず、<br><em>防護服</em>を着ます。", "body": "試験の見本です。粘土の部品で作った人の形です。", "basis": "", "confirm": ""},
+        {"id": "mask", "title": "顔は、<br>マスクでおおいます。", "body": "試験の見本です。", "basis": "", "confirm": ""},
+        {"id": "kiri", "title": "薬剤を、<br><em>霧にして</em>吹きつける。", "body": "試験の見本です。", "basis": "", "confirm": "", "image_note": "霧を白い筋で表した絵です"},
+        {"id": "ato", "title": "見えるのは壁。<br>手間は見えない。", "body": "試験の見本です。", "basis": "", "confirm": ""},
+    ],
+    "unknowns": [],
+    "art": {"place": "room", "place_why": "部屋の壁に吹きつける仕事だから", "hero": "防護服の作業者（粘土）", "invisible": "霧を白い筋で見せる", "showpiece": "kiri 部屋を暗くして霧を見せる"},
+    "scene_plan": "作業者の全身→マスクに寄る→吹きつけ→後ろから全体。",
+}
+CAMERAS_CLAY = [
+    {"id": "fuku", "cam": [{"look": [-1.3, .9, .2], "r": 1.0, "dir": [-.45, .18, 1]}, {"look": [-1.3, .9, .2], "r": .95, "dir": [-.3, .16, 1]}]},
+    {"id": "mask", "cam": [{"look": [-1.4, 1.58, .25], "r": .36, "dir": [-.9, .12, .65]}, {"look": [-1.4, 1.58, .25], "r": .34, "dir": [-.75, .14, .75]}]},
+    {"id": "kiri", "cam": [{"look": [-2.1, 1.1, .5], "r": 1.25, "dir": [.15, .3, 1]}, {"look": [-2.1, 1.1, .5], "r": 1.2, "dir": [.3, .3, 1]}]},
+    {"id": "ato", "cam": [{"look": [-1.3, .9, .2], "r": 1.1, "dir": [.9, .2, .5]}, {"look": [-1.3, .9, .2], "r": 1.05, "dir": [.8, .22, .7]}]},
+]
+CODE_CLAY = """const {world,clay,tube,cyl,std,metal,spray,stain,label,go,on,since,until} = K;
+const w=world('room',{w:6,d:5,cz:1});            // 奥の壁は z=-1.5
+// ===== 作業する人：防護服を着た人を粘土で作る（前は +z。顔は作らない）=====
+const SUIT='#ecebe6';
+const man=clay([
+ {cap:[[.12,.065,-.01],[.12,.06,.13]],r:.068,color:'#33373c',pair:true,k:.02},   // 長ぐつ
+ {cap:[[.12,.1,0],[.12,.34,.01]],r:[.074,.07],color:'#33373c',pair:true,k:.02},   // 長ぐつの筒
+ {cap:[[.12,.31,.01],[.12,.52,.03],[.11,.86,0]],r:[.083,.088,.105],pair:true,k:.03}, // 脚（ぶかぶかの服）
+ {ell:[.12,.5,.075],r:[.06,.05,.025],pair:true,k:.03},                          // ひざのたるみ
+ {ell:[0,.95,0],r:[.21,.13,.14]},                                                // 腰
+ {ell:[0,1.16,0],r:[.215,.28,.155]},                                            // 胴
+ {ell:[0,1.32,.015],r:[.205,.13,.15]},                                          // 胸
+ {cap:[[0,1.46,.16],[0,1.18,.17],[0,.95,.15]],r:.014,k:.012},                   // 前のファスナーのふた
+ {ball:[0,1.5,-.01],r:.1},                                                      // 首（フード）
+ {ell:[0,1.62,-.01],r:[.12,.14,.13]},                                           // 頭（フード）
+ {cap:[[.085,1.66,.085],[.07,1.73,.07],[0,1.75,.08],[-.07,1.73,.07],[-.085,1.66,.085],[-.08,1.55,.09],[0,1.5,.1],[.08,1.55,.09],[.085,1.66,.085]],r:.02,k:.02}, // フードのふち
+ {ell:[0,1.6,.1],r:[.085,.09,.06],color:'#3b4046',k:.015},                      // マスク
+ {ell:[0,1.665,.11],r:[.078,.036,.03],color:'#a9cfe0',k:.008},                  // のぞき窓
+ {ball:[.072,1.55,.135],r:.036,color:'#c9a640',k:.008,pair:true},               // マスクの筒
+ {cap:[[.2,1.38,0],[.28,1.14,.1],[.19,1.04,.29]],r:[.08,.07,.058]},             // 右うで（ノズルを持つ）
+ {cap:[[-.2,1.38,0],[-.29,1.13,.05],[-.17,1.0,.21]],r:[.08,.07,.058]},          // 左うで
+ {ball:[.18,1.035,.33],r:.052,color:'#3f86c8',k:.012},                          // 手ぶくろ
+ {ball:[-.16,.995,.25],r:.052,color:'#3f86c8',k:.012},
+],std({color:SUIT,roughness:.6}),{smooth:.06,at:[-1.3,0,.2],rot:[0,-1.2,0],name:'防護服を着た人'});
+// 背中の薬剤タンク（粘土）
+const tank=clay([{rbox:[0,1.17,-.235],size:[.32,.44,.15],r:.06},{ell:[0,1.4,-.235],r:[.13,.04,.06],color:'#2f3a33'},{cap:[[-.1,.94,-.23],[.1,.94,-.23]],r:.03,color:'#2f3a33'},{cap:[[.13,1.36,-.16],[.15,1.44,-.04],[.17,1.4,.11],[.14,1.15,.155]],r:.018,color:'#3d454d',k:.01,pair:true}],
+ std({color:'#5d8f6c',roughness:.38}),{smooth:.04,at:[-1.3,0,.2],rot:[0,-1.2,0],name:'薬剤のタンク'});
+// ノズル（金属の棒）とホース
+const lance=K.group({at:[-1.3,0,.2],rot:[0,-1.2,0],name:'ノズル'});
+tube([[.18,1.03,.3],[.16,1.04,.55],[.13,1.06,.78]],.011,metal('#b9bdc1'),{parent:lance,name:'ノズル'});
+cyl(.018,.012,.06,metal('#8c9196'),{parent:lance,at:[.13,1.06,.8],rot:[Math.PI/2,0,0]});
+tube([[-.08,.96,-.24],[-.2,.9,-.12],[-.22,.95,.08],[.16,1.02,.28]],.014,std({color:'#2f3337',roughness:.5}),{parent:lance,name:'ホース'});
+// 吹きつけ：ノズルの先 → 奥の壁
+const tip=new K.THREE.Vector3(.13,1.06,.83);lance.updateMatrixWorld(true);lance.localToWorld(tip);const T=(tip.x+2.98)/.93,HIT=[-2.98,1.2,tip.z+.36*T];
+const sp=spray([tip.x,tip.y,tip.z],HIT,{spread:.22,n:70,color:'#d8f0ff',name:'霧にした薬剤'});
+const wet=stain(HIT,.35,{normal:[1,0,0],color:'#7fb8d8',edge:'#cfe8f4',name:'ぬれた所'});
+label('防護服',[-1.454,1.3,.26],{on:'fuku'});
+return function(p,t){
+ sp.set(on('kiri')*go('kiri',.1,.5));
+ wet.set(since('kiri')*go('kiri',.3,.9)*.8,since('kiri')*go('kiri',.3,.9));
+ w.dim(1-.4*on('kiri'));
 };
 """
 LABEL_GOOD = "label('骨',[.42,CY+.324,.016],{on:'ato'});"
@@ -194,12 +260,16 @@ def make_ask():
             work = user.get("work") or ""
             if "灯油" in work:
                 return _stream(json.loads(json.dumps(SCRIPT_CAR, ensure_ascii=False)), on_text, 2.5), FAKE_MODEL
+            if "防護服" in work:
+                return _stream(json.loads(json.dumps(SCRIPT_CLAY, ensure_ascii=False)), on_text, 2.5), FAKE_MODEL
             if "禁止語消えない" in work or ("禁止語入り" in work and not user.get("note")):
                 script["chapters"][4]["body"] = "上の紙を貼ると、カビが殺菌されてきれいになります。"
             return _stream(script, on_text, 2.5), FAKE_MODEL
         if purpose == "scene":
             if "灯油" in (user.get("work") or ""):
                 return _stream({"cameras": CAMERAS_CAR, "code": CODE_CAR}, on_text, 3.5), FAKE_MODEL
+            if "防護服" in (user.get("work") or ""):
+                return _stream({"cameras": CAMERAS_CLAY, "code": CODE_CLAY}, on_text, 3.5), FAKE_MODEL
             code = (KIT / "example.js").read_text(encoding="utf-8")
             if "名札隠れ" in (user.get("work") or ""):
                 code = code.replace(LABEL_GOOD, LABEL_HIDDEN)
@@ -220,7 +290,7 @@ def make_ask():
             if "小さい指摘" in work and rnd == 1:
                 return {"passed": True, "reason": "（手書き）大きな問題はありません。",
                         "issues": [{"image": 3, "item": "nafuda", "severity": "low", "seen": "（手書き）画像3の名札の先に、その物が見えません。", "how_to_fix": "名札を物の表面へ動かす"}]}, FAKE_MODEL
-            if "灯油" in work:
+            if "灯油" in work or "防護服" in work:
                 return {"passed": True, "reason": "（手書き）画像1〜画像8で、文字は読め、物も画面に収まっています。", "issues": []}, FAKE_MODEL
             if "二回とも" in work or "悪くなる" in work or rnd == 1:
                 return {"passed": False, "reason": "（手書き）画像2で物が画面に対して大きく、画像6の名札が小さく読みにくいので不合格です。",
