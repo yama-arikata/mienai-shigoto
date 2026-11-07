@@ -67,13 +67,13 @@ JUDGE_COOKIE = "studio_judge"
 JUDGE_MIN_CODE = 12
 JUDGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 JUDGE_PAGE = """<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>見えない仕事の3D</title>
+<meta name="robots" content="noindex"><title>ひのめ</title>
 <style>body{font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#10233b;color:#f0f1ec}
 form{width:min(400px,calc(100vw - 32px));background:#eceae3;color:#17222e;padding:28px 24px;border-top:6px solid #f2c230;box-sizing:border-box;box-shadow:7px 7px 0 #7d5e40,14px 14px 0 #b7986e}
 h1{font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;font-weight:600;letter-spacing:.04em;font-size:25px;margin:0 0 10px}p{margin:0 0 18px;line-height:1.7}
 input,button{box-sizing:border-box;width:100%;font:inherit;font-size:17px;padding:14px;border-radius:3px;border:2px solid #a9a698;background:#f8f7f2;color:#17222e}input:focus{outline:3px solid #f2c230;outline-offset:1px}
 button{margin-top:12px;background:#f2c230;color:#1a1608;border:2px solid #1a1608;font-weight:800;cursor:pointer}button:focus-visible{outline:3px solid #10233b;outline-offset:2px}
-.err{color:#b3321c;font-weight:700}</style></head><body><form method="post" action="/login"><h1>見えない仕事の3D</h1>
+.err{color:#b3321c;font-weight:700}</style></head><body><form method="post" action="/login"><h1>ひのめ</h1>
 <p>審査の方へ。提出フォームにある合言葉を入れてください。</p>__ERR__<input name="code" type="password" autocomplete="off" aria-label="合言葉" autofocus required><button>開く</button></form></body></html>"""
 
 
