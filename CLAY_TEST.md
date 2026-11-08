@@ -24,7 +24,7 @@
 ## 手順（ターミナルで。ワークツリーの一番上から）
 
 ```bash
-cd /Users/yamanakayuta/Documents/hackathon_2026/mienai_demo/.claude/worktrees/agent-aae44832d8ddf34e3
+cd mienai-shigoto   # リポジトリの一番上
 
 # キーは画面に出さずに入れる（履歴にも残らない）
 read -s ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
