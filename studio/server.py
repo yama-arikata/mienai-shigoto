@@ -77,8 +77,77 @@ button{margin-top:12px;background:#f2c230;color:#1a1608;border:2px solid #1a1608
 <p>審査の方へ。提出フォームにある合言葉を入れてください。</p>__ERR__<input name="code" type="password" autocomplete="off" aria-label="合言葉" autofocus required><button>開く</button></form></body></html>"""
 
 
+MAX_PHOTO_BYTES = 2_000_000  # 参考の写真1枚の上限（縮めたJPEGのあと）
+START_CAP = 40_000 + brain.MAX_PHOTOS * (MAX_PHOTO_BYTES * 4 // 3 + 8)
+
+
+def clean_jpeg(raw):
+    """JPEG だけを受ける。EXIF などの付けたし（APP1〜APP15・コメント）は捨てる。形が違えば ValueError。"""
+    if raw[:3] != b"\xff\xd8\xff":
+        raise ValueError("not jpeg")
+    out, i, n = bytearray(b"\xff\xd8"), 2, len(raw)
+    while True:
+        if i + 4 > n or raw[i] != 0xFF:
+            raise ValueError("broken jpeg")
+        marker = raw[i + 1]
+        if marker == 0xFF:  # 詰め物
+            i += 1
+            continue
+        size = int.from_bytes(raw[i + 2:i + 4], "big")
+        if size < 2 or i + 2 + size > n:
+            raise ValueError("broken jpeg")
+        if not (0xE1 <= marker <= 0xEF or marker == 0xFE):
+            out += raw[i:i + 2 + size]
+        i += 2 + size
+        if marker == 0xDA:  # ここから先は絵のデータ
+            rest = raw[i:]
+            if not rest.rstrip(b"\x00").endswith(b"\xff\xd9"):
+                raise ValueError("broken jpeg")
+            return bytes(out + rest)
+
+
+def read_photos(value):
+    """画面から来た写真（base64 の並び）を確かめる。(JPEGの並び, 問題) を返す。"""
+    if value in (None, []):
+        return [], None
+    unread = "参考の写真を読めませんでした。JPEGの写真だけ使えます。"
+    if not isinstance(value, list):
+        return None, unread
+    if len(value) > brain.MAX_PHOTOS:
+        return None, f"参考の写真は{brain.MAX_PHOTOS}枚までです。"
+    out = []
+    for v in value:
+        if not isinstance(v, str):
+            return None, unread
+        if len(v) > MAX_PHOTO_BYTES * 4 // 3 + 8:
+            return None, "参考の写真が大きすぎます。1枚2MBまでです。"
+        try:
+            raw = base64.b64decode(v, validate=True)
+            if len(raw) > MAX_PHOTO_BYTES:
+                return None, "参考の写真が大きすぎます。1枚2MBまでです。"
+            out.append(clean_jpeg(raw))
+        except ValueError:
+            return None, unread
+    return out, None
+
+
 def now():
     return time.time()
+
+
+# 費用の見積もりに使う単価（USD / 100万トークン）。claude-api スキルの表（2026-10-06 時点）で確かめた値だけを書く。
+# キャッシュ書き込みは5分のもの（入力の1.25倍）。表に無いモデルは「単価未確認」としてトークン数だけ残す。
+PRICES = {"claude-opus-5-5": {"input_tokens": 4.00, "output_tokens": 20.00, "cache_creation_input_tokens": 5.00, "cache_read_input_tokens": 0.20}}
+PRICE_SOURCE = "claude-api スキルの料金表（2026-10-06時点）: Opus 5.5 入力$4・出力$20・キャッシュ読み$0.20／100万トークン、キャッシュ書き(5分)は入力の1.25倍=$5"
+TOKEN_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+_CTX = threading.local()  # いま動いているスレッドが、どのプロジェクトの仕事か
+
+
+def usd_of(model, tokens):
+    price = PRICES.get(model or "")
+    if not price:
+        return None
+    return round(sum(tokens.get(k, 0) * price[k] for k in TOKEN_KEYS) / 1_000_000, 4)
 
 
 def safe_note(text, fallback="書けない言葉を含む問題でした"):
@@ -248,6 +317,17 @@ class Store:
             raise ValueError("bad image")
         (self.dir(pid) / "shots" / name).write_bytes(raw)
 
+    def put_photos(self, pid, photos):
+        d = self.dir(pid) / "photos"
+        d.mkdir(exist_ok=True)
+        for i, raw in enumerate(photos, 1):
+            (d / f"{i}.jpg").write_bytes(raw)
+
+    def photos(self, pid):
+        """Claude に見せる参考の写真（base64）。無ければ空。"""
+        d = self.dir(pid) / "photos"
+        return [base64.b64encode((d / f"{i}.jpg").read_bytes()).decode("ascii") for i in range(1, brain.MAX_PHOTOS + 1) if (d / f"{i}.jpg").is_file()]
+
     def shot_path(self, pid, name):
         if not re.fullmatch(r"[a-z0-9_]{1,24}\.jpg", name or ""):
             return None
@@ -285,7 +365,8 @@ class Engine:
     FIX_RUN = ("fixing", "fix_repair")
 
     def __init__(self, store, ask, publisher, max_rounds=MAX_ROUNDS):
-        self.store, self.ask, self.publisher, self.max_rounds = store, ask, publisher, max_rounds
+        self.store, self.publisher, self.max_rounds = store, publisher, max_rounds
+        self._raw_ask, self.ask = ask, self._ask_counted
         self.lock = threading.Lock()
         self.running, self.again = set(), set()
         self.live = {}
@@ -299,7 +380,70 @@ class Engine:
             self.running.add(pid)
         threading.Thread(target=self._run, args=(pid,), daemon=True).start()
 
+    # ---------- 使ったトークン（usage.json。キーや本文は書かない）----------
+    def _ask_counted(self, purpose, *args, **kwargs):
+        pid, t0, err = getattr(_CTX, "pid", None), time.time(), None
+        try:
+            return self._raw_ask(purpose, *args, **kwargs)
+        except Exception as exc:
+            err = type(exc).__name__
+            raise
+        finally:
+            usage = claude.take_usage()
+            if pid:
+                try:
+                    self.record_usage(pid, purpose, kwargs.get("effort"), usage, time.time() - t0, err)
+                except Exception:
+                    traceback.print_exc()
+
+    def record_usage(self, pid, purpose, effort, usage, seconds, err):
+        with self.store.lock(pid):
+            u = self.store.get_json(pid, "usage.json") or {"note": "Claude を呼んだ回ごとのトークン数。キーや本文は書いていません。", "price_source": PRICE_SOURCE, "calls": [], "builds": []}
+            tokens = {k: int((usage or {}).get(k) or 0) for k in TOKEN_KEYS}
+            model = (usage or {}).get("model") or ""
+            call = {"at": round(now(), 1), "purpose": purpose, "effort": (usage or {}).get("effort") or effort, "model": model or ("試験（Claudeを呼んでいない）" if self.store.test else ""),
+                    **tokens, "seconds": round(seconds, 1), "attempts": (usage or {}).get("attempts", 0), "usd": usd_of(model, tokens)}
+            if err:
+                call["error"] = err
+            u["calls"].append(call)
+            self._usage_sum(u)
+            self.store.put_json(pid, "usage.json", u)
+
+    @staticmethod
+    def _usage_sum(u):
+        def add(box, c):
+            for k in TOKEN_KEYS:
+                box[k] = box.get(k, 0) + c.get(k, 0)
+            box["calls"] = box.get("calls", 0) + 1
+            box["seconds"] = round(box.get("seconds", 0) + c.get("seconds", 0), 1)
+            if c.get("usd") is None:
+                box["unpriced_calls"] = box.get("unpriced_calls", 0) + (1 if any(c.get(k) for k in TOKEN_KEYS) else 0)
+            else:
+                box["usd"] = round(box.get("usd", 0) + c["usd"], 4)
+        by, total = {}, {}
+        for c in u["calls"]:
+            add(by.setdefault(c["purpose"], {}), c)
+            add(total, c)
+        u["by_purpose"], u["total"] = by, total
+        if total.get("unpriced_calls"):
+            u["usd_note"] = "単価未確認のモデルの回があります。その回はトークン数のみで、usd に入っていません"
+
+    def usage_finish(self, pid, job):
+        """1本作り終えたとき：この作りの間の回だけを、工程別と合計にまとめて残す。"""
+        with self.store.lock(pid):
+            u = self.store.get_json(pid, "usage.json") or {"calls": [], "builds": [], "price_source": PRICE_SOURCE}
+            st, en = job.get("started") or 0, job.get("ended") or now()
+            part = {"calls": [c for c in u["calls"] if st - 1 <= c["at"] <= en + 1]}
+            self._usage_sum(part)
+            interview = [c for c in u["calls"] if c["purpose"] == "question"]
+            u.setdefault("builds", []).append({"started": round(st, 1), "ended": round(en, 1), "build_seconds": round(en - st, 1), "result": job.get("stage"),
+                                               "scene_effort": brain.SCENE_EFFORT, "clay": brain.CLAY, "by_purpose": part["by_purpose"], "total": part["total"],
+                                               "interview_calls_before": len(interview)})
+            self._usage_sum(u)
+            self.store.put_json(pid, "usage.json", u)
+
     def _run(self, pid):
+        _CTX.pid = pid
         try:
             while True:
                 self._advance(pid)
@@ -363,12 +507,13 @@ class Engine:
     # ---------- 聞き取り ----------
     def ask_next(self, pid):
         def work():
+            _CTX.pid = pid
             try:
                 p = self.store.load(pid)
                 if len(p["qa"]) >= brain.MAX_QUESTIONS:
                     q = {"done": True}
                 else:
-                    q = brain.next_question(self.ask, p)
+                    q = brain.next_question(self.ask, p, photos=self.store.photos(pid))
                 with self.store.edit(pid) as p:
                     p["asking"], p["ask_error"] = False, None
                     if q.get("done"):
@@ -414,7 +559,8 @@ class Engine:
         p = self.store.load(pid)
         t0 = now()
         lv = self._live(pid)
-        raw, model = brain.write_script(self.ask, p, on_text=lv.feed)
+        photos = self.store.photos(pid)
+        raw, model = brain.write_script(self.ask, p, on_text=lv.feed, photos=photos)
         raw = brain.tidy_script(raw, p)
         errs = brain.check_script(raw)
         if errs:
@@ -422,7 +568,7 @@ class Engine:
                 self.log(q, "found", "台本に直す所がありました。書き直しています。")
             self.store.memo(pid, "script_flagged", json.dumps(errs, ensure_ascii=False))
             lv = self._live(pid)
-            raw, model = brain.write_script(self.ask, p, on_text=lv.feed, note="前の台本には次の問題がありました。主張ごと消すか、形を直してください。同じ意味の言い換えはしません: " + " / ".join(errs))
+            raw, model = brain.write_script(self.ask, p, on_text=lv.feed, photos=photos, note="前の台本には次の問題がありました。主張ごと消すか、形を直してください。同じ意味の言い換えはしません: " + " / ".join(errs))
             raw = brain.tidy_script(raw, p)
             errs = brain.check_script(raw)
             if errs:
@@ -601,11 +747,13 @@ class Engine:
                 self.set_stage(p, "failed")
                 p["stage"] = "failed"
                 j["error"] = "動くページになりませんでした。直しても動かなかったので、ここで止めました。"
+                self.usage_finish(pid, j)
                 return
             p["current"] = best["version"]
             p["history"] = [best["version"]]
             p["stage"] = "ready"
             self.set_stage(p, "done")
+            self.usage_finish(pid, j)
             left = len(j["remaining"])
             if left:
                 self.log(p, "left", f"直しきれなかった問題が{left}つ残っています。")
@@ -868,7 +1016,7 @@ class Engine:
             "qa": [{"axis": q["axis"], "axis_name": brain.AXES.get(q["axis"], ""), "q": q["q"], "a": q.get("a") or "", "skipped": bool(q.get("skipped"))} for q in p["qa"]],
             "pending": p.get("pending"), "asking": p.get("asking"), "ask_error": p.get("ask_error"),
             "current": p.get("current"), "can_undo": len(p.get("history", [])) > 1, "person_fixes": p.get("person_fixes", 0),
-            "job": self.job_view(p), "fix": self.fix_view(p), "max_questions": brain.MAX_QUESTIONS,
+            "job": self.job_view(p), "fix": self.fix_view(p), "max_questions": brain.MAX_QUESTIONS, "photos": p.get("photos", 0),
         }
         if spec:
             view["chapters"] = [{"id": c["id"], "title": brain.plain(c["title"]), "body": brain.plain(c["body"]), "confirm": c.get("confirm") or ""} for c in spec["chapters"]]
@@ -1070,7 +1218,7 @@ class Handler(BaseHTTPRequestHandler):
         if self._judge_gate():
             return
         path = self.path.split("?", 1)[0]
-        cap = 24_000_000 if path == "/api/report" else 40_000
+        cap = 24_000_000 if path == "/api/report" else START_CAP if path == "/api/start" else 40_000
         try:
             size = int(self.headers.get("Content-Length") or 0)
             if size > cap:
@@ -1118,7 +1266,14 @@ class Handler(BaseHTTPRequestHandler):
             if not text and item["key"] != "looks":
                 return self._send(400, {"error": "empty", "key": item["key"]})
             intake[item["key"]] = text
+        photos, bad = read_photos(data.get("photos"))
+        if bad:
+            return self._send(400, {"error": "bad_photo", "message": bad})
         p = self.store.create(intake)
+        if photos:
+            self.store.put_photos(p["id"], photos)
+            with self.store.edit(p["id"]) as q:
+                q["photos"] = len(photos)
         self.engine.ask_next(p["id"])
         return self._send(200, {"id": p["id"]})
 
