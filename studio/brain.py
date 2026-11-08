@@ -37,8 +37,8 @@ SCENE_EFFORT, FIX_EFFORT, REVIEW_EFFORT = "medium", "high", "medium"
 _EFFORTS = ("low", "medium", "high", "xhigh", "max")
 if (os.environ.get("STUDIO_SCENE_EFFORT") or "").strip() in _EFFORTS:
     SCENE_EFFORT = os.environ["STUDIO_SCENE_EFFORT"].strip()
-# 粘土の部品（K.clay）を Claude に教えるか。STUDIO_CLAY=0 で今までどおり（粘土なし・人の形は作らない）
-CLAY = (os.environ.get("STUDIO_CLAY") or "1").strip() not in ("0", "off", "no", "false")
+# 粘土の部品（K.clay）を Claude に教えるか。既定は切る（試作）。STUDIO_CLAY=1 で使う。0 は今までどおり（粘土なし・人の形は作らない）
+CLAY = (os.environ.get("STUDIO_CLAY") or "0").strip() not in ("0", "off", "no", "false")
 _CLAY_BLOCK = re.compile(r"<!--clay-->(.*?)<!--/clay-->", re.S)
 _NOCLAY_BLOCK = re.compile(r"<!--noclay-->(.*?)<!--/noclay-->", re.S)
 
