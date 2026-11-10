@@ -4,6 +4,10 @@
 
 お客さんに見えない仕事を、職人が話すだけで3Dのページにする道具です。Built with Claude Japan 2026 の期間中に作りました。
 
+**デモ動画（3分）**: https://youtu.be/EPCNjFdQyXg
+
+[![ひのめ デモ動画](https://img.youtube.com/vi/EPCNjFdQyXg/hqdefault.jpg)](https://youtu.be/EPCNjFdQyXg)
+
 作者の父は、ひとりで清掃の仕事をしています。カビ取りでは、床の下まで潜って薬剤を広げますが、その手間はお客さんには見えません。このままでは伝わらないので、話した内容をそのまま3Dにする道具を作りました。
 
 ## 流れ
